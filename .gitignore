@@ -46,6 +46,7 @@ build-*/
 
 # CMake generated files
 CMakeFiles/
+Makefile
 CMakeCache.txt
 cmake_install.cmake
 install_manifest.txt
@@ -68,3 +69,4 @@ Testing/
 .cache/
 
 test.*
+.gitignore
