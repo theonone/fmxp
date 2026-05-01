@@ -14,25 +14,24 @@
 
 namespace fmxp {
 
-std::string generateAESKey() {
+ByteBuffer generateAESKey() {
   unsigned char key[32];
 
   if (RAND_bytes(key, sizeof(key)) != 1) throwErr("AES key generation failed");
 
-  return base64Encode(key, sizeof(key));
+  return ByteBuffer(key, sizeof(key));
 }
 
-std::string aesEncrypt(const std::string& plaintext,
-                       const std::string& keyStr) {
-  auto key = base64Decode(keyStr);
+ByteBuffer aesEncrypt(const ByteBuffer& plaintext, const ByteBuffer& keyBuf) {
+  if (keyBuf.size() != 32) throw std::runtime_error("Invalid AES-256 key");
 
-  if (key.size() != 32) throw std::runtime_error("Invalid AES-256 key");
+  const unsigned char* key =
+      reinterpret_cast<const unsigned char*>(keyBuf.cdata());
 
   unsigned char iv[12];
   if (RAND_bytes(iv, sizeof(iv)) != 1) throwErr("IV generation failed");
 
   EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-
   if (!ctx) throwErr("AES ctx failed");
 
   if (EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) !=
@@ -41,72 +40,84 @@ std::string aesEncrypt(const std::string& plaintext,
 
   EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, sizeof(iv), nullptr);
 
-  EVP_EncryptInit_ex(ctx, nullptr, nullptr, key.data(), iv);
+  if (EVP_EncryptInit_ex(ctx, nullptr, nullptr, key, iv) != 1)
+    throwErr("Encrypt key init failed");
 
-  std::vector<unsigned char> ciphertext(plaintext.size());
+  ByteBuffer ciphertext;
+  ciphertext.reserve(plaintext.size());
 
   int len = 0;
-  int total = 0;
 
-  EVP_EncryptUpdate(ctx, ciphertext.data(), &len,
-                    reinterpret_cast<const unsigned char*>(plaintext.data()),
-                    plaintext.size());
+  ciphertext.resize(
+      plaintext.size());  // optional helper OR manual append buffer
 
-  total += len;
+  if (EVP_EncryptUpdate(
+          ctx, ciphertext.data(), &len,
+          reinterpret_cast<const unsigned char*>(plaintext.cdata()),
+          plaintext.size()) != 1)
+    throwErr("Encrypt update failed");
 
-  EVP_EncryptFinal_ex(ctx, ciphertext.data() + total, &len);
+  size_t total = len;
+
+  if (EVP_EncryptFinal_ex(ctx, ciphertext.data() + total, &len) != 1)
+    throwErr("Encrypt final failed");
 
   total += len;
   ciphertext.resize(total);
 
   unsigned char tag[16];
-
   EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, sizeof(tag), tag);
 
   EVP_CIPHER_CTX_free(ctx);
 
-  return base64Encode(iv, sizeof(iv)) + ":" + base64Encode(tag, sizeof(tag)) +
-         ":" + base64Encode(ciphertext.data(), ciphertext.size());
+  // Build final packet:
+  // [IV][TAG][CIPHERTEXT]
+
+  ByteBuffer result;
+  result.append(reinterpret_cast<uint8_t*>(iv), sizeof(iv));
+  result.append(reinterpret_cast<uint8_t*>(tag), sizeof(tag));
+  result += ciphertext;
+
+  return result;
 }
+ByteBuffer aesDecrypt(const ByteBuffer& encrypted, const ByteBuffer& keyBuf) {
+  if (keyBuf.size() != 32) throw std::runtime_error("Invalid AES-256 key");
 
-std::string aesDecrypt(const std::string& encrypted,
-                       const std::string& keyStr) {
-  auto key = base64Decode(keyStr);
+  if (encrypted.size() < 12 + 16)
+    throw std::runtime_error("Invalid AES packet");
 
-  if (key.size() != 32) throw std::runtime_error("Invalid AES-256 key");
+  const unsigned char* key =
+      reinterpret_cast<const unsigned char*>(keyBuf.cdata());
 
-  size_t p1 = encrypted.find(':');
-  size_t p2 = encrypted.find(':', p1 + 1);
-
-  if (p1 == std::string::npos || p2 == std::string::npos)
-    throw std::runtime_error("Bad AES packet");
-
-  std::string ivStr = encrypted.substr(0, p1);
-  std::string tagStr = encrypted.substr(p1 + 1, p2 - p1 - 1);
-  std::string ctStr = encrypted.substr(p2 + 1);
-
-  auto iv = base64Decode(ivStr);
-  auto tag = base64Decode(tagStr);
-  auto ct = base64Decode(ctStr);
+  const unsigned char* iv = encrypted.cdata();
+  const unsigned char* tag = encrypted.cdata() + 12;
+  const unsigned char* ct = encrypted.cdata() + 28;
+  size_t ctLen = encrypted.size() - 28;
 
   EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+  if (!ctx) throwErr("AES ctx failed");
 
-  EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr);
+  if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) !=
+      1)
+    throwErr("Decrypt init failed");
 
-  EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, iv.size(), nullptr);
+  EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 12, nullptr);
 
-  EVP_DecryptInit_ex(ctx, nullptr, nullptr, key.data(), iv.data());
+  if (EVP_DecryptInit_ex(ctx, nullptr, nullptr, key, iv) != 1)
+    throwErr("Decrypt key init failed");
 
-  std::vector<unsigned char> plaintext(ct.size());
+  ByteBuffer plaintext;
+  plaintext.resize(ctLen);
 
   int len = 0;
-  int total = 0;
+  size_t total = 0;
 
-  EVP_DecryptUpdate(ctx, plaintext.data(), &len, ct.data(), ct.size());
+  if (EVP_DecryptUpdate(ctx, plaintext.data(), &len, ct, ctLen) != 1)
+    throwErr("Decrypt update failed");
 
   total += len;
 
-  EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, tag.size(), tag.data());
+  EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, 16, (void*)tag);
 
   int ret = EVP_DecryptFinal_ex(ctx, plaintext.data() + total, &len);
 
@@ -117,7 +128,7 @@ std::string aesDecrypt(const std::string& encrypted,
   total += len;
   plaintext.resize(total);
 
-  return std::string(reinterpret_cast<char*>(plaintext.data()),
-                     plaintext.size());
+  return plaintext;
 }
+
 }  // namespace fmxp

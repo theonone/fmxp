@@ -1,6 +1,8 @@
 #pragma once
 
 #include <string>
+
+#include "../ByteBuffer.hpp"
 /*
 schema:
 0. the server has a PINNED RSA-2048 key pair
@@ -23,7 +25,7 @@ struct RSAKeyPair {
 
 /*
 Generates a RSA-2048 key pair using OpenSSL
-@return struct RSAKeyPair (std::string public_key, std::string private_key)
+@return struct RSAKeyPair (ByteBuffer public_key, ByteBuffer private_key)
 */
 RSAKeyPair generateRSAKeyPair();
 
@@ -34,8 +36,8 @@ limitations, it should only be used for encrypting the AES key.
 @param publicKeyPem RSA-2048 public key in PEM format
 @return encrypted string
 */
-std::string rsaEncrypt(const std::string& plaintext,
-                       const std::string& publicKeyPem);
+ByteBuffer rsaEncrypt(const ByteBuffer& plaintext,
+                      const std::string& publicKeyPem);
 
 /*
 Decrypts `ciphertext` with `key` using RSA-2048
@@ -43,7 +45,7 @@ Decrypts `ciphertext` with `key` using RSA-2048
 @param privateKeyPem RSA-2048 private key in PEM format
 @return decrypted string
 */
-std::string rsaDecrypt(const std::string& ciphertext,
-                       const std::string& privateKeyPem);
+ByteBuffer rsaDecrypt(const ByteBuffer& ciphertext,
+                      const std::string& privateKeyPem);
 
 }  // namespace fmxp

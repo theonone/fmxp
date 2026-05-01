@@ -35,6 +35,10 @@ ByteBuffer::ByteBuffer(const char* data, size_t len)
   append(reinterpret_cast<const uint8_t*>(data), len);
 }
 
+ByteBuffer::ByteBuffer(const unsigned char* data, size_t len) {
+  append(reinterpret_cast<const uint8_t*>(data), len);
+}
+
 ByteBuffer::ByteBuffer(const ByteBuffer& other)
     : _data(nullptr), _size(0), _capacity(0) {
   append(other._data, other._size);
@@ -124,6 +128,11 @@ uint8_t& ByteBuffer::operator[](size_t index) { return _data[index]; }
 const uint8_t& ByteBuffer::operator[](size_t index) const {
   return _data[index];
 }
+void ByteBuffer::resize(size_t len) {
+  ensureCapacity(len);
+  _size = len;
+}
+
 std::string ByteBuffer::toString() const {
   return std::string(reinterpret_cast<const char*>(_data), _size);
 }

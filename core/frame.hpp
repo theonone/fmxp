@@ -1,7 +1,8 @@
 #pragma once
 
 #include <cstdint>
-#include <string>
+
+#include "ByteBuffer.hpp"
 
 #define __FMXP_VERSION 1
 
@@ -42,18 +43,18 @@ struct Header {
 struct Frame {
   uint32_t id;
   uint8_t status;
-  std::string path;
-  std::string data;
+  ByteBuffer path;
+  ByteBuffer data;
 };
 
-Frame makeRequestFrame(const std::string& path, const std::string& data);
+Frame makeRequestFrame(const ByteBuffer& path, const ByteBuffer& data);
 
-Frame makeResponseFrame(uint8_t status, const std::string& path,
-                        const std::string& data);
+Frame makeResponseFrame(uint8_t status, const ByteBuffer& path,
+                        const ByteBuffer& data);
 
-std::string encodeFrame(const Frame& frame, bool encrypt, bool compress,
-                        const std::string& key);
+ByteBuffer encodeFrame(const Frame& frame, bool encrypt, bool compress,
+                       const ByteBuffer& key);
 
-Frame decodeFrame(const std::string& data);
+Frame decodeFrame(const ByteBuffer& data);
 
 }  // namespace fmxp

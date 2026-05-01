@@ -2,13 +2,15 @@
 
 #include <string>
 
+#include "../ByteBuffer.hpp"
+
 namespace fmxp {
 
 /*
 Generates a AES-256-GCM key in a cryptographically secure way using OpenSSL's
 RAND_bytes
 */
-std::string generateAESKey();
+ByteBuffer generateAESKey();
 
 /*
 Encrypts `plaintext` with `key` using AES-256-GCM
@@ -16,7 +18,7 @@ Encrypts `plaintext` with `key` using AES-256-GCM
 @param key AES-256-GCM key
 @return encrypted string
 */
-std::string aesEncrypt(const std::string& plaintext, const std::string& key);
+ByteBuffer aesEncrypt(const ByteBuffer& plaintext, const ByteBuffer& key);
 
 /*
 Decrypts `encrypted` with `key` using AES-256-GCM
@@ -24,5 +26,5 @@ Decrypts `encrypted` with `key` using AES-256-GCM
 @param key AES-256-GCM key
 @return decrypted string
 */
-std::string aesDecrypt(const std::string& encrypted, const std::string& key);
+ByteBuffer aesDecrypt(const ByteBuffer& encrypted, const ByteBuffer& key);
 }  // namespace fmxp

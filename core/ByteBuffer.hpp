@@ -7,9 +7,9 @@
 namespace fmxp {
 class ByteBuffer {
  private:
-  uint8_t* _data;
-  size_t _size;
-  size_t _capacity;
+  uint8_t* _data = nullptr;
+  size_t _size = 0;
+  size_t _capacity = 0;
 
   void ensureCapacity(size_t newCap);
 
@@ -17,6 +17,7 @@ class ByteBuffer {
   ByteBuffer();
   ByteBuffer(const std::string& str);
   ByteBuffer(const char* data, size_t len);
+  ByteBuffer(const unsigned char* data, size_t len);
 
   ByteBuffer(const ByteBuffer& other);
   ByteBuffer(ByteBuffer&& other) noexcept;
@@ -46,6 +47,8 @@ class ByteBuffer {
 
   uint8_t& operator[](size_t index);
   const uint8_t& operator[](size_t index) const;
+
+  void resize(size_t len);
 
   std::string toString() const;
 };
