@@ -21,11 +21,28 @@ struct RSAKeyPair {
   std::string private_key;
 };
 
+/*
+Generates a RSA-2048 key pair using OpenSSL
+@return struct RSAKeyPair (std::string public_key, std::string private_key)
+*/
 RSAKeyPair generateRSAKeyPair();
 
+/*
+Encrypts `plaintext` with `key` using RSA-2048. Due to `plaintext` length
+limitations, it should only be used for encrypting the AES key.
+@param plaintext string to encrypt
+@param publicKeyPem RSA-2048 public key in PEM format
+@return encrypted string
+*/
 std::string rsaEncrypt(const std::string& plaintext,
                        const std::string& publicKeyPem);
 
+/*
+Decrypts `ciphertext` with `key` using RSA-2048
+@param ciphertext string to decrypt
+@param privateKeyPem RSA-2048 private key in PEM format
+@return decrypted string
+*/
 std::string rsaDecrypt(const std::string& ciphertext,
                        const std::string& privateKeyPem);
 
