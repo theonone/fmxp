@@ -26,8 +26,7 @@ const uint8_t STATUS_FORBIDDEN = 6;
  @param version protocol version (not encrypted)
 */
 struct Header {
-  uint64_t length;
-  uint8_t flags = 0xFF;
+  uint64_t length = 0;
   uint8_t version = __FMXP_VERSION;
 };
 
@@ -43,18 +42,29 @@ struct Header {
 struct Frame {
   uint32_t id;
   uint8_t status;
+  uint8_t flags = 0;
   ByteBuffer path;
   ByteBuffer data;
 };
 
-Frame makeRequestFrame(const ByteBuffer& path, const ByteBuffer& data);
+class FMXPException : public std::exception {
+ public:
+  FMXPException(const std::string& msg) : _msg(msg) {}
+  const char* what() const noexcept override { return _msg.c_str(); }
+
+ private:
+  std::string _msg;
+};
+
+Frame makeRequestFrame(const ByteBuffer& path, const ByteBuffer& data,
+                       uint8_t flags);
 
 Frame makeResponseFrame(uint8_t status, const ByteBuffer& path,
-                        const ByteBuffer& data);
+                        const ByteBuffer& data, uint8_t flags);
 
-ByteBuffer encodeFrame(const Frame& frame, bool encrypt, bool compress,
-                       const ByteBuffer& key);
+ByteBuffer encodeFrame(const Frame& frame, bool encrypt, const ByteBuffer& key);
 
-Frame decodeFrame(const ByteBuffer& data);
+Frame decodeFrame(const ByteBuffer& data, bool encrypted,
+                  const ByteBuffer& key);
 
 }  // namespace fmxp

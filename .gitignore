@@ -68,3 +68,6 @@ vcpkg_installed/
 Testing/
 .cache/
 test.*
+
+core/utils.hpp
+core/utils.cpp

@@ -1,6 +1,7 @@
 #include "ByteBuffer.hpp"
 
 #include <cstring>
+#include <stdexcept>
 #include <utility>
 namespace fmxp {
 
@@ -123,14 +124,24 @@ ByteBuffer ByteBuffer::operator+(const std::string& str) const {
   return result;
 }
 
-uint8_t& ByteBuffer::operator[](size_t index) { return _data[index]; }
+uint8_t& ByteBuffer::operator[](size_t index) {
+  if (index >= _size) throw std::out_of_range("Index out of range");
+  return _data[index];
+}
 
 const uint8_t& ByteBuffer::operator[](size_t index) const {
+  if (index >= _size) throw std::out_of_range("Index out of range");
   return _data[index];
 }
 void ByteBuffer::resize(size_t len) {
   ensureCapacity(len);
   _size = len;
+}
+
+ByteBuffer ByteBuffer::slice(size_t start, size_t end) const {
+  if (end > _size || start >= end)
+    throw std::out_of_range("Invalid slice range");
+  return ByteBuffer(_data + start, end - start);
 }
 
 std::string ByteBuffer::toString() const {

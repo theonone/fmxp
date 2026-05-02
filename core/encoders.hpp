@@ -21,4 +21,9 @@ uint32_t strToU32(const std::string& value);
 std::string u64ToStr(uint64_t value);
 uint64_t strToU64(const std::string& value);
 
+uint16_t ptrToU16(const uint8_t* p);
+
+uint32_t ptrToU32(const uint8_t* p);
+
+uint64_t ptrToU64(const uint8_t* p);
 }  // namespace fmxp

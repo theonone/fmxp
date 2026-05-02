@@ -6,7 +6,9 @@
 
 namespace fmxp {
 
-std::string u8ToStr(uint8_t value) { return "" + static_cast<char>(value); }
+std::string u8ToStr(uint8_t value) {
+  return std::string(1, static_cast<unsigned char>(value));
+}
 
 uint8_t strToU8(const std::string& value) {
   return static_cast<uint8_t>(value[0]);
@@ -59,6 +61,22 @@ uint64_t strToU64(const std::string& s) {
          (static_cast<uint64_t>(static_cast<unsigned char>(s[5])) << 16) |
          (static_cast<uint64_t>(static_cast<unsigned char>(s[6])) << 8) |
          static_cast<uint64_t>(static_cast<unsigned char>(s[7]));
+}
+
+uint16_t ptrToU16(const uint8_t* p) {
+  return (uint16_t(p[0]) << 8) | uint16_t(p[1]);
+}
+
+uint32_t ptrToU32(const uint8_t* p) {
+  return (uint32_t(p[0]) << 24) | (uint32_t(p[1]) << 16) |
+         (uint32_t(p[2]) << 8) | uint32_t(p[3]);
+}
+
+uint64_t ptrToU64(const uint8_t* p) {
+  return (uint64_t(p[0]) << 56) | (uint64_t(p[1]) << 48) |
+         (uint64_t(p[2]) << 40) | (uint64_t(p[3]) << 32) |
+         (uint64_t(p[4]) << 24) | (uint64_t(p[5]) << 16) |
+         (uint64_t(p[6]) << 8) | uint64_t(p[7]);
 }
 
 }  // namespace fmxp

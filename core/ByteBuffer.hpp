@@ -50,6 +50,11 @@ class ByteBuffer {
 
   void resize(size_t len);
 
+  /*
+  Slices the ByteBuffer into a new ByteBuffer [start, end)
+  */
+  ByteBuffer slice(size_t start, size_t end) const;
+
   std::string toString() const;
 };
 }  // namespace fmxp
