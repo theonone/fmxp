@@ -6,19 +6,72 @@
 
 #include "enc/aes.hpp"
 #include "encoders.hpp"
+#include "errors.hpp"
 
 namespace fmxp {
+constexpr size_t __FMXP_HEADER_SIZE = 17;
+constexpr size_t __FMXP_BODY_HEADER_SIZE = 4;  // flags + status + path_len
+constexpr size_t __FMXP_MIN_FRAME_SIZE = 21;   // header + body header
+
+uint64_t getFrameBodySize(const ByteBuffer& encoded) {
+  return ptrToU64(encoded.cdata() + 9);
+}
+
+uint32_t getFrameId(const ByteBuffer& encoded) {
+  return ptrToU32(encoded.cdata() + 5);
+}
+
+bool validateProtocol(const ByteBuffer& encoded) {
+  if (encoded.size() < 4) return false;
+  return std::memcmp(encoded.cdata(), "fmxp", 4) == 0;
+}
+
+uint8_t getFrameVersion(const ByteBuffer& encoded) {
+  return *(encoded.cdata() + 4);
+}
+
+uint8_t getBodyFlags(const ByteBuffer& encoded) { return *(encoded.cdata()); }
+
+uint8_t getBodyStatus(const ByteBuffer& encoded) {
+  return *(encoded.cdata() + 1);
+}
+
+uint16_t getBodyPathLen(const ByteBuffer& encoded) {
+  return ptrToU16(encoded.cdata() + 2);
+}
+
+uint8_t* getFrameBodyPtr(ByteBuffer& encoded) { return encoded.data() + 17; }
+
+const uint8_t* getFrameBodyPtr(const ByteBuffer& encoded) {
+  return encoded.cdata() + 17;
+}
+
+uint8_t* getBodyPathPtr(ByteBuffer& encoded) { return encoded.data() + 4; }
+
+const uint8_t* getBodyPathPtr(const ByteBuffer& encoded) {
+  return encoded.cdata() + 4;
+}
+
+uint8_t* getBodyDataPtr(ByteBuffer& encoded) {
+  uint16_t pathLen = getBodyPathLen(encoded);
+  return encoded.data() + 4 + pathLen;
+}
+
+const uint8_t* getBodyDataPtr(const ByteBuffer& encoded) {
+  uint16_t pathLen = getBodyPathLen(encoded);
+  return encoded.cdata() + 4 + pathLen;
+}
 
 uint8_t makeFlags(bool compress) { return compress ? 0x01 : 0x00; }
 
 Frame makeResponseFrame(uint8_t status, const ByteBuffer& path,
-                        const ByteBuffer& data, uint8_t flags) {
-  return Frame{_frame_count++, status, flags, path, data};
+                        const ByteBuffer& data, uint8_t flags, uint32_t id) {
+  return Frame{id, status, flags, path, data};
 }
 
 Frame makeRequestFrame(const ByteBuffer& path, const ByteBuffer& data,
                        uint8_t flags) {
-  return Frame{_frame_count++, STATUS_REQ, flags, path, data};
+  return Frame{++_frame_count, STATUS_REQ, flags, path, data};
 }
 
 // encoding:
@@ -52,62 +105,62 @@ std::string ptrToString(const uint8_t* ptr, size_t size) {
 }
 
 // fmxp<version:1b><f_id:4b><size:8b><flags:1b><status:1b><path_len:2b><path><data>
+/*
+offsets:
+fmxp - 0
+version - 4
+id - 5
+size - 9
+flags - 17
+status - 18
+path_len - 19
+path - 21
+data - 21 + path_len
+*/
 Frame decodeFrame(const ByteBuffer& data, bool encrypted,
                   const ByteBuffer& key) {
-  const uint8_t* ptr = data.cdata();
   size_t size = data.size();
 
-  // fmxp + ver + id + size + flags + status + path_len is already 17 bytes
-  if (size < 17) throw FMXPException("Invalid frame size");
+  // fmxp + ver + id + size + flags + status + path_len is already 21 bytes
+  if (size < 21) throw FMXPException(ERR_INVALID_FRAME, "Invalid frame size");
 
-  size_t offset = 0;
+  if (!validateProtocol(data))
+    throw FMXPException(ERR_INVALID_FRAME, "Invalid protocol");
 
-  if (std::memcmp(ptr, "fmxp", 4) != 0) throw FMXPException("Invalid protocol");
-  offset += 4;
+  if (getFrameVersion(data) != __FMXP_VERSION)
+    throw FMXPException(ERR_INVALID_FRAME, "Protocol version mismatch");
 
-  uint8_t version = ptr[offset++];
-  if (version != __FMXP_VERSION)
-    throw FMXPException("Protocol version mismatch");
+  uint32_t id = getFrameId(data);
 
-  uint32_t id = ptrToU32(ptr + offset);
-  offset += 4;
+  uint64_t bodySize = getFrameBodySize(data);
 
-  uint64_t bodySize = ptrToU64(ptr + offset);
-  offset += 8;
-
-  if (bodySize != size - offset)
-    throw FMXPException("Frame body size mismatch");
+  if (bodySize != size - __FMXP_HEADER_SIZE)
+    throw FMXPException(ERR_INVALID_FRAME, "Frame body size mismatch");
 
   ByteBuffer body;
 
   if (encrypted) {
-    ByteBuffer enc(ptr + offset, bodySize);
+    ByteBuffer enc(getFrameBodyPtr(data), bodySize);
     body = aesDecrypt(enc, key);
   } else {
-    body = ByteBuffer(ptr + offset, bodySize);
+    body = ByteBuffer(getFrameBodyPtr(data), bodySize);
   }
 
-  const uint8_t* bodyPtr = body.cdata();
+  if (body.size() < 4) throw FMXPException(ERR_INVALID_FRAME, "Body too small");
 
-  if (body.size() < 4) throw FMXPException("Body too small");
+  uint8_t flags = getBodyFlags(body);
+  uint8_t status = getBodyStatus(body);
 
-  size_t bodyOffset = 0;
+  uint16_t pathLen = getBodyPathLen(body);
 
-  uint8_t flags = bodyPtr[bodyOffset++];
-  uint8_t status = bodyPtr[bodyOffset++];
+  if (pathLen + 21 > body.size())
+    throw FMXPException(ERR_INVALID_FRAME, "Invalid path length");
 
-  uint16_t pathLen = ptrToU16(bodyPtr + bodyOffset);
-  bodyOffset += 2;
+  ByteBuffer path(getBodyPathPtr(body), pathLen);
 
-  if (bodyOffset + pathLen > body.size())
-    throw FMXPException("Invalid path length");
+  size_t dataLen = bodySize - pathLen - 4;
 
-  ByteBuffer path(bodyPtr + bodyOffset, pathLen);
-  bodyOffset += pathLen;
-
-  size_t dataLen = bodySize - bodyOffset;
-
-  ByteBuffer bodyData(bodyPtr + bodyOffset, dataLen);
+  ByteBuffer bodyData(getBodyDataPtr(body), dataLen);
 
   Frame f;
   f.id = id;

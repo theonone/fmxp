@@ -10,7 +10,8 @@
 #include <stdexcept>
 #include <vector>
 
-#include "util.hpp"
+#include "../errors.hpp"
+
 namespace fmxp {
 
 std::string bioToString(BIO* bio) {
@@ -24,7 +25,7 @@ EVP_PKEY* loadPublicKey(const std::string& pem) {
   EVP_PKEY* key = PEM_read_bio_PUBKEY(bio, nullptr, nullptr, nullptr);
   BIO_free(bio);
 
-  if (!key) throwErr("Failed loading public key");
+  if (!key) throwErr(ERR_ENCRYPTION, "Failed loading public key");
   return key;
 }
 
@@ -33,22 +34,24 @@ EVP_PKEY* loadPrivateKey(const std::string& pem) {
   EVP_PKEY* key = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
   BIO_free(bio);
 
-  if (!key) throwErr("Failed loading private key");
+  if (!key) throwErr(ERR_ENCRYPTION, "Failed loading private key");
   return key;
 }
 
 RSAKeyPair generateRSAKeyPair() {
   EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr);
-  if (!ctx) throwErr("Failed creating RSA context");
+  if (!ctx) throwErr(ERR_ENCRYPTION, "Failed creating RSA context");
 
-  if (EVP_PKEY_keygen_init(ctx) <= 0) throwErr("Keygen init failed");
+  if (EVP_PKEY_keygen_init(ctx) <= 0)
+    throwErr(ERR_ENCRYPTION, "Keygen init failed");
 
   if (EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, 2048) <= 0)
-    throwErr("Failed setting RSA bits");
+    throwErr(ERR_ENCRYPTION, "Failed setting RSA bits");
 
   EVP_PKEY* pkey = nullptr;
 
-  if (EVP_PKEY_keygen(ctx, &pkey) <= 0) throwErr("RSA generation failed");
+  if (EVP_PKEY_keygen(ctx, &pkey) <= 0)
+    throwErr(ERR_ENCRYPTION, "RSA generation failed");
 
   BIO* pub = BIO_new(BIO_s_mem());
   BIO* priv = BIO_new(BIO_s_mem());
@@ -71,9 +74,10 @@ ByteBuffer rsaEncrypt(const ByteBuffer& plaintext,
   EVP_PKEY* key = loadPublicKey(publicKeyPem);
 
   EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(key, nullptr);
-  if (!ctx) throwErr("Encrypt ctx failed");
+  if (!ctx) throwErr(ERR_ENCRYPTION, "Encrypt ctx failed");
 
-  if (EVP_PKEY_encrypt_init(ctx) <= 0) throwErr("Encrypt init failed");
+  if (EVP_PKEY_encrypt_init(ctx) <= 0)
+    throwErr(ERR_ENCRYPTION, "Encrypt init failed");
 
   EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_OAEP_PADDING);
   EVP_PKEY_CTX_set_rsa_oaep_md(ctx, EVP_sha256());
@@ -82,7 +86,7 @@ ByteBuffer rsaEncrypt(const ByteBuffer& plaintext,
 
   if (EVP_PKEY_encrypt(ctx, nullptr, &outLen, plaintext.cdata(),
                        plaintext.size()) <= 0)
-    throwErr("RSA encrypt size failed");
+    throwErr(ERR_ENCRYPTION, "RSA encrypt size failed");
 
   ByteBuffer out;
   out.reserve(outLen);
@@ -92,7 +96,7 @@ ByteBuffer rsaEncrypt(const ByteBuffer& plaintext,
 
   if (EVP_PKEY_encrypt(ctx, tmp.data(), &outLen, plaintext.cdata(),
                        plaintext.size()) <= 0)
-    throwErr("RSA encrypt failed");
+    throwErr(ERR_ENCRYPTION, "RSA encrypt failed");
 
   EVP_PKEY_free(key);
   EVP_PKEY_CTX_free(ctx);
@@ -105,9 +109,10 @@ ByteBuffer rsaDecrypt(const ByteBuffer& ciphertext,
   EVP_PKEY* key = loadPrivateKey(privateKeyPem);
 
   EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(key, nullptr);
-  if (!ctx) throwErr("Decrypt ctx failed");
+  if (!ctx) throwErr(ERR_ENCRYPTION, "Decrypt ctx failed");
 
-  if (EVP_PKEY_decrypt_init(ctx) <= 0) throwErr("Decrypt init failed");
+  if (EVP_PKEY_decrypt_init(ctx) <= 0)
+    throwErr(ERR_ENCRYPTION, "Decrypt init failed");
 
   EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_OAEP_PADDING);
   EVP_PKEY_CTX_set_rsa_oaep_md(ctx, EVP_sha256());
@@ -116,13 +121,13 @@ ByteBuffer rsaDecrypt(const ByteBuffer& ciphertext,
 
   if (EVP_PKEY_decrypt(ctx, nullptr, &outLen, ciphertext.cdata(),
                        ciphertext.size()) <= 0)
-    throwErr("RSA decrypt size failed");
+    throwErr(ERR_ENCRYPTION, "RSA decrypt size failed");
 
   std::vector<uint8_t> tmp(outLen);
 
   if (EVP_PKEY_decrypt(ctx, tmp.data(), &outLen, ciphertext.cdata(),
                        ciphertext.size()) <= 0)
-    throwErr("RSA decrypt failed");
+    throwErr(ERR_ENCRYPTION, "RSA decrypt failed");
 
   EVP_PKEY_free(key);
   EVP_PKEY_CTX_free(ctx);

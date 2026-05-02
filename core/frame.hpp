@@ -47,24 +47,40 @@ struct Frame {
   ByteBuffer data;
 };
 
-class FMXPException : public std::exception {
- public:
-  FMXPException(const std::string& msg) : _msg(msg) {}
-  const char* what() const noexcept override { return _msg.c_str(); }
-
- private:
-  std::string _msg;
-};
-
 Frame makeRequestFrame(const ByteBuffer& path, const ByteBuffer& data,
                        uint8_t flags);
 
 Frame makeResponseFrame(uint8_t status, const ByteBuffer& path,
-                        const ByteBuffer& data, uint8_t flags);
+                        const ByteBuffer& data, uint8_t flags, uint32_t id);
 
 ByteBuffer encodeFrame(const Frame& frame, bool encrypt, const ByteBuffer& key);
 
 Frame decodeFrame(const ByteBuffer& data, bool encrypted,
                   const ByteBuffer& key);
 
+uint64_t getFrameBodySize(const ByteBuffer& encoded);
+
+uint32_t getFrameId(const ByteBuffer& encoded);
+
+bool validateProtocol(const ByteBuffer& encoded);
+
+const uint8_t* getFrameBodyPtr(const ByteBuffer& encoded);
+
+uint8_t* getFrameBodyPtr(ByteBuffer& encoded);
+
+uint8_t getFrameVersion(const ByteBuffer& encoded);
+
+const uint8_t* getBodyDataPtr(const ByteBuffer& encoded);
+
+uint8_t* getBodyDataPtr(ByteBuffer& encoded);
+
+uint8_t getBodyStatus(const ByteBuffer& encoded);
+
+uint8_t getBodyFlags(const ByteBuffer& encoded);
+
+uint16_t getBodyPathLen(const ByteBuffer& encoded);
+
+uint8_t* getBodyPathPtr(ByteBuffer& encoded);
+
+const uint8_t* getBodyPathPtr(const ByteBuffer& encoded);
 }  // namespace fmxp
