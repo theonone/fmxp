@@ -106,7 +106,7 @@ void Server::_epollLoop() {
 
           ClientConnection* conn =
               new ClientConnection(clientFd, _maxFrameSize, _privKey,
-                                   [this](Request& req) { _onRequest(req); });
+                                   [this](Request req) { _onRequest(req); });
           if (_onDisconn) conn->setOnClose(_onDisconn);
 
           _connections[clientFd] = conn;
@@ -122,7 +122,7 @@ void Server::_epollLoop() {
 
       // disconnect
       if (events[i].events & (EPOLLRDHUP | EPOLLHUP)) {
-        conn->closeConnection();
+        conn->closeConnection(CloseReason::NATURAL, true);
         delete conn;
         _connections.erase(it);
         continue;
