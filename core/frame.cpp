@@ -9,9 +9,6 @@
 #include "errors.hpp"
 
 namespace fmxp {
-constexpr size_t __FMXP_HEADER_SIZE = 17;
-constexpr size_t __FMXP_BODY_HEADER_SIZE = 4;  // flags + status + path_len
-constexpr size_t __FMXP_MIN_FRAME_SIZE = 21;   // header + body header
 
 uint64_t getFrameBodySize(const ByteBuffer& encoded) {
   return ptrToU64(encoded.cdata() + 9);
@@ -122,7 +119,8 @@ Frame decodeFrame(const ByteBuffer& data, bool encrypted,
   size_t size = data.size();
 
   // fmxp + ver + id + size + flags + status + path_len is already 21 bytes
-  if (size < 21) throw FMXPException(ERR_INVALID_FRAME, "Invalid frame size");
+  if (size < __FMXP_MIN_FRAME_SIZE)
+    throw FMXPException(ERR_INVALID_FRAME, "Invalid frame size");
 
   if (!validateProtocol(data))
     throw FMXPException(ERR_INVALID_FRAME, "Invalid protocol");

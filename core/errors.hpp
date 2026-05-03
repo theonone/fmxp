@@ -9,6 +9,7 @@ const uint8_t ERR_INVALID_FRAME = 1;
 const uint8_t ERR_FRAME_TOO_LONG = 2;
 const uint8_t ERR_ENCRYPTION = 3;
 const uint8_t ERR_SEND_FAILED = 4;
+const uint8_t ERR_CONNECTION = 5;
 
 class FMXPException : public std::exception {
  public:

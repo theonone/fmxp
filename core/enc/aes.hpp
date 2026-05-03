@@ -5,6 +5,7 @@
 #include "../ByteBuffer.hpp"
 
 namespace fmxp {
+constexpr size_t __AES_KEY_SIZE = 32;
 
 /*
 Generates a AES-256-GCM key in a cryptographically secure way using OpenSSL's

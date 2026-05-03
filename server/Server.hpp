@@ -1,62 +1,60 @@
-// #pragma once
+#pragma once
 
-// #include <functional>
-// #include <map>
-// #include <string>
-// #include <thread>
-// #include <vector>
+#include <functional>
+#include <map>
+#include <mutex>
+#include <queue>
+#include <string>
+#include <thread>
+#include <vector>
 
-// namespace fmxp {
+#include "structures.hpp"
 
-// class Request;
-// class Responder;
-// class Connection;
-// struct Frame;
+namespace fmxp {
 
-// class Server {
-//  private:
-//   std::string _privKey;
-//   int _port;
-//   int _maxConnections;
-//   int _maxFrameSize;
+class Server {
+ private:
+  std::string _privKey;
+  int _port;
+  int _maxConnections;
+  int _maxFrameSize;
 
-//   int _socket = -1;
+  int _socket = -1;
 
-//   int _epollFd = -1;
-//   std::thread _epollThread;
+  int _epollFd = -1;
 
-//   bool _running = false;
+  bool _running = false;
 
-//   std::map<std::string, std::function<void(Request&, Responder&)>> _routes;
+  std::function<void(ClientConnection*)> _onConn;
+  std::function<void(int, CloseReason)> _onDisconn;
 
-//   std::vector<std::function<bool(const Request&)>> _functionalRouters;
+  std::queue<Request> _reqQueue;
 
-//   std::map<int, Connection*> _connections;
+  std::map<int, ClientConnection*> _connections;
 
-//   void* _workerQueue = nullptr;
+  void _epollLoop();
 
-//   void _epollLoop();
-//   void _handleFrame(int fd, const Frame& frame);
-//   void _sendResponse(Connection& conn, const Frame& frame);
+  void _onRequest(Request& req);
+  void _defaultErrorHandler(uint8_t code, const std::string& message);
 
-//  public:
-//   Server(int port, std::string privKey, int maxConnections = 1024,
-//          int maxFrameSize = 64 * 1024);
+  std::function<void(uint8_t, const std::string&)> _onErr;
 
-//   ~Server();
+  std::mutex _reqQMutex;
 
-//   void route(const std::string& path,
-//              std::function<void(Request&, Responder&)> handler);
+ public:
+  Server(int port, std::string privKey, int maxConnections = 1024,
+         int maxFrameSize = 64 * 1024);
 
-//   void route(std::function<bool(const Request&)> matcher,
-//              std::function<void(Request&, Responder&)> handler);
+  ~Server();
 
-//   void listen();
-//   void stop();
+  //   void route(const std::string& path,
+  //              std::function<void(Request&, Responder&)> handler);
 
-//   std::function<void(Connection&)> onConnect;
-//   std::function<void(Connection&)> onDisconnect;
-//   std::function<void(std::string)> onError;
-// };
+  //   void route(std::function<bool(const Request&)> matcher,
+  //              std::function<void(Request&, Responder&)> handler);
 
-// }  // namespace fmxp
+  void listen();
+  void stop();
+};
+
+}  // namespace fmxp

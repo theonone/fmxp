@@ -4,19 +4,23 @@
 
 #include "ByteBuffer.hpp"
 
-#define __FMXP_VERSION 1
-
 namespace fmxp {
+
+constexpr uint8_t __FMXP_VERSION = 1;
 
 static uint32_t _frame_count = 0;
 
-const uint8_t STATUS_REQ = 0;
-const uint8_t STATUS_OK = 1;
-const uint8_t STATUS_BAD_REQ = 2;
-const uint8_t STATUS_SERVER_ERROR = 3;
-const uint8_t STATUS_NOT_FOUND = 4;
-const uint8_t STATUS_UNAUTHORIZED = 5;
-const uint8_t STATUS_FORBIDDEN = 6;
+constexpr uint8_t STATUS_REQ = 0;
+constexpr uint8_t STATUS_OK = 1;
+constexpr uint8_t STATUS_BAD_REQ = 2;
+constexpr uint8_t STATUS_SERVER_ERROR = 3;
+constexpr uint8_t STATUS_NOT_FOUND = 4;
+constexpr uint8_t STATUS_UNAUTHORIZED = 5;
+constexpr uint8_t STATUS_FORBIDDEN = 6;
+
+constexpr size_t __FMXP_HEADER_SIZE = 17;
+constexpr size_t __FMXP_BODY_HEADER_SIZE = 4;  // flags + status + path_len
+constexpr size_t __FMXP_MIN_FRAME_SIZE = 21;   // header + body header
 
 /*
  The struct used to represent the header of an individual frame
