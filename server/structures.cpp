@@ -101,6 +101,15 @@ std::vector<Frame> ClientConnection::_parseFrames() {
   }
 }
 
+// TODO: add id uniqueness check, key uniqueness check, maybe checksum
+bool ClientConnection::_validateFrame(const Frame& frame) {
+  if (abs(getTimestamp() - frame.timestamp) > 60) {
+    closeConnection(CloseReason::INVALID_REQUEST);
+    return false;
+  }
+  return true;
+}
+
 void ClientConnection::sendFrame(const Frame& frame) {
   ByteBuffer encoded = encodeFrame(frame, true, _aesKey);
   size_t total = 0;
@@ -153,6 +162,9 @@ bool ClientConnection::readFd() {
   } else if (_state == ConnectionState::ACTIVE) {
     for (const auto& frame : frames) {
       _onNewRequest(Request{frame, this});
+      if (!_validateFrame(frame)) {
+        return false;
+      }
     }
   }
   return true;

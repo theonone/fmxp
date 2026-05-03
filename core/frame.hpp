@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include "ByteBuffer.hpp"
+#include "tools.hpp"
 
 namespace fmxp {
 
@@ -18,9 +19,12 @@ constexpr uint8_t STATUS_NOT_FOUND = 4;
 constexpr uint8_t STATUS_UNAUTHORIZED = 5;
 constexpr uint8_t STATUS_FORBIDDEN = 6;
 
-constexpr size_t __FMXP_HEADER_SIZE = 17;
-constexpr size_t __FMXP_BODY_HEADER_SIZE = 4;  // flags + status + path_len
-constexpr size_t __FMXP_MIN_FRAME_SIZE = 21;   // header + body header
+// fmxp<version:1b><size:8b><timestamp:4b><f_id:4b><flags:1b><status:1b><path_len:2b><path><data>
+constexpr size_t __FMXP_HEADER_SIZE = 5 + 8;
+constexpr size_t __FMXP_BODY_HEADER_SIZE =
+    12;  // timestamp + id + flags + status + path_len
+constexpr size_t __FMXP_MIN_FRAME_SIZE =
+    __FMXP_BODY_HEADER_SIZE + __FMXP_HEADER_SIZE;  // header + body header
 
 /*
  The struct used to represent the header of an individual frame
@@ -49,6 +53,7 @@ struct Frame {
   uint8_t flags = 0;
   ByteBuffer path;
   ByteBuffer data;
+  uint32_t timestamp = getTimestamp();
 };
 
 Frame makeRequestFrame(const ByteBuffer& path, const ByteBuffer& data,
@@ -64,7 +69,7 @@ Frame decodeFrame(const ByteBuffer& data, bool encrypted,
 
 uint64_t getFrameBodySize(const ByteBuffer& encoded);
 
-uint32_t getFrameId(const ByteBuffer& encoded);
+uint32_t getBodyId(const ByteBuffer& encoded);
 
 bool validateProtocol(const ByteBuffer& encoded);
 

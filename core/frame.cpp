@@ -7,56 +7,58 @@
 #include "enc/aes.hpp"
 #include "encoders.hpp"
 #include "errors.hpp"
+#include "tools.hpp"
 
 namespace fmxp {
 
+// fmxp<version:1b><size:8b><timestamp:4b><f_id:4b><flags:1b><status:1b><path_len:2b><path><data>
+
 uint64_t getFrameBodySize(const ByteBuffer& encoded) {
-  return ptrToU64(encoded.cdata() + 9);
-}
-
-uint32_t getFrameId(const ByteBuffer& encoded) {
-  return ptrToU32(encoded.cdata() + 5);
-}
-
-bool validateProtocol(const ByteBuffer& encoded) {
-  if (encoded.size() < 4) return false;
-  return std::memcmp(encoded.cdata(), "fmxp", 4) == 0;
+  return ptrToU64(encoded.cdata() + 5);
 }
 
 uint8_t getFrameVersion(const ByteBuffer& encoded) {
   return *(encoded.cdata() + 4);
 }
 
-uint8_t getBodyFlags(const ByteBuffer& encoded) { return *(encoded.cdata()); }
-
-uint8_t getBodyStatus(const ByteBuffer& encoded) {
-  return *(encoded.cdata() + 1);
+bool validateProtocol(const ByteBuffer& encoded) {
+  return encoded.size() >= 4 && std::memcmp(encoded.cdata(), "fmxp", 4) == 0;
 }
-
-uint16_t getBodyPathLen(const ByteBuffer& encoded) {
-  return ptrToU16(encoded.cdata() + 2);
-}
-
-uint8_t* getFrameBodyPtr(ByteBuffer& encoded) { return encoded.data() + 17; }
 
 const uint8_t* getFrameBodyPtr(const ByteBuffer& encoded) {
-  return encoded.cdata() + 17;
+  return encoded.cdata() + 5 + 8;
 }
 
-uint8_t* getBodyPathPtr(ByteBuffer& encoded) { return encoded.data() + 4; }
-
-const uint8_t* getBodyPathPtr(const ByteBuffer& encoded) {
-  return encoded.cdata() + 4;
+uint32_t getBodyTimestamp(const ByteBuffer& body) {
+  return ptrToU32(body.cdata());
 }
 
-uint8_t* getBodyDataPtr(ByteBuffer& encoded) {
-  uint16_t pathLen = getBodyPathLen(encoded);
-  return encoded.data() + 4 + pathLen;
+uint32_t getBodyId(const ByteBuffer& body) {
+  return ptrToU32(body.cdata() + 4);
 }
 
-const uint8_t* getBodyDataPtr(const ByteBuffer& encoded) {
-  uint16_t pathLen = getBodyPathLen(encoded);
-  return encoded.cdata() + 4 + pathLen;
+uint8_t getBodyFlags(const ByteBuffer& body) { return *(body.cdata() + 8); }
+
+uint8_t getBodyStatus(const ByteBuffer& body) { return *(body.cdata() + 9); }
+
+uint16_t getBodyPathLen(const ByteBuffer& body) {
+  return ptrToU16(body.cdata() + 10);
+}
+
+const uint8_t* getBodyPathPtr(const ByteBuffer& body) {
+  return body.cdata() + 12;
+}
+
+uint8_t* getBodyPathPtr(ByteBuffer& body) { return body.data() + 12; }
+
+const uint8_t* getBodyDataPtr(const ByteBuffer& body) {
+  uint16_t pathLen = getBodyPathLen(body);
+  return body.cdata() + 12 + pathLen;
+}
+
+uint8_t* getBodyDataPtr(ByteBuffer& body) {
+  uint16_t pathLen = getBodyPathLen(body);
+  return body.data() + 12 + pathLen;
 }
 
 uint8_t makeFlags(bool compress) { return compress ? 0x01 : 0x00; }
@@ -72,15 +74,16 @@ Frame makeRequestFrame(const ByteBuffer& path, const ByteBuffer& data,
 }
 
 // encoding:
-// fmxp<version:1b><f_id:4b><size:8b><flags:1b><status:1b><path_len:2b><path><data>
+// fmxp<version:1b><size:8b><timestamp:4b><f_id:4b><flags:1b><status:1b><path_len:2b><path><data>
 ByteBuffer encodeFrame(const Frame& frame, bool encrypt,
                        const ByteBuffer& key) {
   ByteBuffer encoded;
   encoded += ByteBuffer("fmxp", 4);
   encoded += u8ToStr(__FMXP_VERSION);
-  encoded += u32ToStr(frame.id);
 
   ByteBuffer body;
+  body += u32ToStr(frame.timestamp);
+  body += u32ToStr(frame.id);
   body += u8ToStr(frame.flags);
   body += u8ToStr(frame.status);
   body += u16ToStr(frame.path.size());
@@ -97,29 +100,25 @@ ByteBuffer encodeFrame(const Frame& frame, bool encrypt,
   return encoded;
 }
 
-std::string ptrToString(const uint8_t* ptr, size_t size) {
-  return std::string(reinterpret_cast<const char*>(ptr), size);
-}
-
-// fmxp<version:1b><f_id:4b><size:8b><flags:1b><status:1b><path_len:2b><path><data>
+// fmxp<version:1b><size:8b><timestamp:4b><f_id:4b><flags:1b><status:1b><path_len:2b><path><data>
 /*
 offsets:
 fmxp - 0
 version - 4
-id - 5
-size - 9
-flags - 17
-status - 18
-path_len - 19
-path - 21
-data - 21 + path_len
+size - 5
+timestamp - 5+8
+id - 17
+flags - 21
+status - 22
+path_len - 23
+path - 25
+data - 25 + path_len
 */
 Frame decodeFrame(const ByteBuffer& data, bool encrypted,
                   const ByteBuffer& key) {
   size_t size = data.size();
 
-  // fmxp + ver + id + size + flags + status + path_len is already 21 bytes
-  if (size < __FMXP_MIN_FRAME_SIZE)
+  if (size < __FMXP_HEADER_SIZE)
     throw FMXPException(ERR_INVALID_FRAME, "Invalid frame size");
 
   if (!validateProtocol(data))
@@ -127,8 +126,6 @@ Frame decodeFrame(const ByteBuffer& data, bool encrypted,
 
   if (getFrameVersion(data) != __FMXP_VERSION)
     throw FMXPException(ERR_INVALID_FRAME, "Protocol version mismatch");
-
-  uint32_t id = getFrameId(data);
 
   uint64_t bodySize = getFrameBodySize(data);
 
@@ -144,28 +141,30 @@ Frame decodeFrame(const ByteBuffer& data, bool encrypted,
     body = ByteBuffer(getFrameBodyPtr(data), bodySize);
   }
 
-  if (body.size() < 4) throw FMXPException(ERR_INVALID_FRAME, "Body too small");
+  if (body.size() < 12)
+    throw FMXPException(ERR_INVALID_FRAME, "Body too small");
 
+  uint32_t timestamp = getBodyTimestamp(body);
+  uint32_t id = getBodyId(body);
   uint8_t flags = getBodyFlags(body);
   uint8_t status = getBodyStatus(body);
-
   uint16_t pathLen = getBodyPathLen(body);
 
-  if (pathLen + 21 > body.size())
+  if (12 + pathLen > body.size())
     throw FMXPException(ERR_INVALID_FRAME, "Invalid path length");
 
   ByteBuffer path(getBodyPathPtr(body), pathLen);
 
-  size_t dataLen = bodySize - pathLen - 4;
-
+  size_t dataLen = body.size() - 12 - pathLen;
   ByteBuffer bodyData(getBodyDataPtr(body), dataLen);
 
   Frame f;
+  f.timestamp = timestamp;
   f.id = id;
+  f.flags = flags;
   f.status = status;
   f.path = std::move(path);
   f.data = std::move(bodyData);
-  f.flags = flags;
 
   return f;
 }

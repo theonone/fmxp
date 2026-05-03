@@ -35,6 +35,8 @@ class ClientConnection {
   void _setAesKey(const ByteBuffer& aesKey);
   std::vector<Frame> _parseFrames();
 
+  bool _validateFrame(const Frame& frame);
+
  public:
   ClientConnection(int fd, uint64_t maxFrameSize, const std::string& rsaPrivKey,
                    std::function<void(Request)> onNewRequest);
