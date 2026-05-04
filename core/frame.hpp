@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 
 #include "ByteBuffer.hpp"
@@ -9,7 +10,7 @@ namespace fmxp {
 
 constexpr uint8_t __FMXP_VERSION = 1;
 
-static uint32_t _frame_count = 0;
+static std::atomic<uint32_t> _frame_count = 0;
 
 constexpr uint8_t STATUS_REQ = 0;
 constexpr uint8_t STATUS_OK = 1;

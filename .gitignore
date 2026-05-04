@@ -71,3 +71,4 @@ test.*
 
 core/utils.hpp
 core/utils.cpp
+main.cpp

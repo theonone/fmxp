@@ -25,6 +25,11 @@ class ConcurrentQueue {
     _queue.pop();
     return true;
   }
+
+  void clear() {
+    std::lock_guard lock(_mutex);
+    _queue = std::queue<T>();
+  }
 };
 
 }  // namespace fmxp

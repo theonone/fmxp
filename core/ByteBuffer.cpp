@@ -40,6 +40,12 @@ ByteBuffer::ByteBuffer(const unsigned char* data, size_t len) {
   append(reinterpret_cast<const uint8_t*>(data), len);
 }
 
+ByteBuffer::ByteBuffer(const char* string) {
+  // find null terminator
+  size_t len = strlen(string);
+  append(reinterpret_cast<const uint8_t*>(string), len);
+}
+
 ByteBuffer::ByteBuffer(const ByteBuffer& other)
     : _data(nullptr), _size(0), _capacity(0) {
   append(other._data, other._size);

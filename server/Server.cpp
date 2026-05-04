@@ -17,7 +17,7 @@
 
 namespace fmxp {
 // runs inside threadpool
-void Server::_router(Request& req) {
+void Server::_router(Request req) {
   auto rtIt = _routes.find(req.path());
   if (rtIt != _routes.end()) {
     rtIt->second(req, _responder);
@@ -51,6 +51,11 @@ void Server::_handleCommand(const ServerCommand& cmd) {
   }
 }
 
+void Server::_wakeEpoll() {
+  uint64_t one = 1;
+  write(_cmdEvFd, &one, sizeof(one));
+}
+
 Server::Server(int port, std::string privKey, size_t workerThreads,
                int maxConnections, int maxFrameSize)
     : _privKey(std::move(privKey)),
@@ -58,9 +63,8 @@ Server::Server(int port, std::string privKey, size_t workerThreads,
       _maxConnections(maxConnections),
       _maxFrameSize(maxFrameSize),
       _tpool(workerThreads),
-      _responder(
-          [this](const Response& resp) { sendTo(resp.connectionID(), resp); },
-          [this](uint64_t connID) { closeConnection(connID); }) {
+      _responder([this](const Response& resp) { sendResponse(resp); },
+                 [this](uint64_t connID) { closeConnection(connID); }) {
   _onErr = [this](uint8_t code, const std::string& message) {
     _defaultErrorHandler(code, message);
   };
@@ -78,33 +82,34 @@ void Server::route(std::function<bool(const Request&)> matcher,
   _funcRoutes.push_back({matcher, handler});
 }
 
-void Server::sendTo(uint64_t connectionID, const Response& resp) {
+void Server::sendResponse(const Response& resp) {
   _commandQueue.push({.type = ServerCommand::Type::SEND,
-                      .connID = connectionID,
+                      .connID = resp.connectionID(),
                       .frame = resp.toFrame()});
 
-  uint64_t one = 1;
-  write(_cmdEvFd, &one, sizeof(one));
+  _wakeEpoll();
 }
 
 void Server::closeConnection(uint64_t connectionID) {
   _commandQueue.push({.type = ServerCommand::Type::CLOSE,
                       .connID = connectionID,
                       .frame = std::nullopt});
-  uint64_t one = 1;
-  write(_cmdEvFd, &one, sizeof(one));
+  _wakeEpoll();
 }
 
 void Server::listen() {
   _socket = socket(AF_INET, SOCK_STREAM, 0);
   if (_socket < 0) {
-    throwErr(ERR_CONNECTION, "socket failed");
+    throwErr(ERR_CONNECTION, "socket creation failed");
   }
 
   sockaddr_in addr{};
   addr.sin_family = AF_INET;
   addr.sin_port = htons(_port);
   addr.sin_addr.s_addr = INADDR_ANY;
+
+  int opt = 1;
+  setsockopt(_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
   if (bind(_socket, (sockaddr*)&addr, sizeof(addr)) < 0) {
     throwErr(ERR_CONNECTION, "bind failed");
@@ -144,6 +149,8 @@ void Server::listen() {
 
 void Server::stop() {
   _running = false;
+  _commandQueue.clear();
+  _wakeEpoll();
 
   for (auto& p : _connections) {
     delete p.second;
@@ -234,8 +241,7 @@ void Server::_epollLoop() {
     }
   }
 }
-void Server::_onRequest(Request& req) {
-  std::lock_guard<std::mutex> lock(_taskMutex);
+void Server::_onRequest(Request req) {
   _tpool.enqueue([this, &req]() { _router(req); });
 }
 

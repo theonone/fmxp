@@ -18,6 +18,7 @@ class ByteBuffer {
   ByteBuffer(const std::string& str);
   ByteBuffer(const char* data, size_t len);
   ByteBuffer(const unsigned char* data, size_t len);
+  ByteBuffer(const char* string);
 
   ByteBuffer(const ByteBuffer& other);
   ByteBuffer(ByteBuffer&& other) noexcept;

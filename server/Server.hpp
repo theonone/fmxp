@@ -69,16 +69,16 @@ class Server {
 
   void _epollLoop();
 
-  void _onRequest(Request& req);
+  void _onRequest(Request req);
   void _defaultErrorHandler(uint8_t code, const std::string& message);
 
   std::function<void(uint8_t, const std::string&)> _onErr;
 
-  std::mutex _taskMutex;
-
-  void _router(Request& req);
+  void _router(Request req);
 
   void _handleCommand(const ServerCommand& cmd);
+
+  void _wakeEpoll();
 
  public:
   Server(int port, std::string privKey, size_t workerThreads,
@@ -92,7 +92,7 @@ class Server {
   void route(std::function<bool(const Request&)> matcher,
              std::function<void(Request&, const Responder&)> handler);
 
-  void sendTo(uint64_t connectionID, const Response& resp);
+  void sendResponse(const Response& resp);
 
   void closeConnection(uint64_t connectionID);
 
