@@ -90,7 +90,6 @@ std::vector<Frame> Connection::_parseFrames() {
   while (true) {
     if (_frameBuffer.size() < __FMXP_MIN_FRAME_SIZE) return frames;
 
-    const uint8_t* ptr = _frameBuffer.cdata();
     if (!validateProtocol(_frameBuffer)) {  // invalid frame
       close();
       return frames;
@@ -104,18 +103,32 @@ std::vector<Frame> Connection::_parseFrames() {
     }
     if (_frameBuffer.size() < bodyLen + __FMXP_HEADER_SIZE)
       return frames;  // less than 1 complete frame
-    ByteBuffer frameBuf = _frameBuffer.slice(0, bodyLen + __FMXP_HEADER_SIZE);
+    ByteBuffer frameBuf =
+        _frameBuffer.slice(0, bodyLen + __FMXP_HEADER_SIZE - 1);
     try {
       Frame frame = decodeFrame(frameBuf, true, _aesKey);
-      if (_state == ConnectionState::HANDSHAKE &&
-          frame.data.toString() == "Connection secured") {
-        std::cout << "Handshake complete, connection secured." << std::endl;
-        _state = ConnectionState::CONNECTED;
-        continue;
+      if (_state == ConnectionState::HANDSHAKE) {
+        if (frame.data.toString() == "Connection secured") {
+          std::cout << "Handshake complete, connection secured." << std::endl;
+          _state = ConnectionState::CONNECTED;
+          if (bodyLen + __FMXP_HEADER_SIZE < _frameBuffer.size()) {
+            _frameBuffer = _frameBuffer.slice(bodyLen + __FMXP_HEADER_SIZE,
+                                              _frameBuffer.size() - 1);
+          } else {
+            _frameBuffer.clear();
+          }
+          continue;
+        }
+        throwErr(ERR_CONNECTION, "Handshake failed");
       }
+
       frames.push_back(frame);
-      _frameBuffer =
-          _frameBuffer.slice(bodyLen + __FMXP_HEADER_SIZE, _frameBuffer.size());
+      if (bodyLen + __FMXP_HEADER_SIZE < _frameBuffer.size()) {
+        _frameBuffer = _frameBuffer.slice(bodyLen + __FMXP_HEADER_SIZE,
+                                          _frameBuffer.size() - 1);
+      } else {
+        _frameBuffer.clear();
+      }
     } catch (const FMXPException& e) {
       close();
       return frames;
@@ -126,7 +139,8 @@ std::vector<Frame> Connection::_parseFrames() {
 void Connection::_doHandshake() {
   _aesKey = generateAESKey();
   auto encedKey = rsaEncrypt(_aesKey, _pubKey);
-  send(Request("", encedKey));
+  _handleCommand({.type = ClientCommand::Type::SEND,
+                  .frame = Request("", encedKey).toFrame()});
 }
 
 void Connection::send(const Request& req) {
@@ -166,13 +180,15 @@ void Connection::_handleCommand(const ClientCommand& cmd) {
 
       // the only frame we don't encrypt here
       toBeSent = encodeFrame(cmd.frame.value(), false, ByteBuffer());
-      write(_socket, toBeSent.cdata(), toBeSent.size());
+      ::send(_socket, toBeSent.cdata(), toBeSent.size(), 0);
+      std::cout << "Handshake sent" << std::endl;
       return;
     }
 
     // normal sending logic
     ByteBuffer encoded = encodeFrame(cmd.frame.value(), true, _aesKey);
-    write(_socket, encoded.cdata(), encoded.size());
+    ::send(_socket, encoded.cdata(), encoded.size(), 0);
+    std::cout << "Sent " << encoded.size() << " bytes" << std::endl;
 
   } else if (cmd.type == ClientCommand::Type::CLOSE) {
     close();
@@ -215,6 +231,8 @@ void Connection::_epollLoop() {
         if (events[i].events & EPOLLIN) {
           char buffer[4096];
           ssize_t len = recv(_socket, buffer, sizeof(buffer), 0);
+
+          std::cout << "Received " << len << " bytes" << std::endl;
 
           if (len <= 0) {
             _running = false;

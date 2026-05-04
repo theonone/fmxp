@@ -1,6 +1,7 @@
 #include "frame.hpp"
 
 #include <cstring>
+#include <iostream>
 #include <stdexcept>
 #include <string>
 
@@ -134,8 +135,11 @@ Frame decodeFrame(const ByteBuffer& data, bool encrypted,
 
   uint64_t bodySize = getFrameBodySize(data);
 
-  if (bodySize != size - __FMXP_HEADER_SIZE)
+  if (bodySize != size - __FMXP_HEADER_SIZE) {
+    std::cout << "bodySize: " << bodySize
+              << ", size: " << size - __FMXP_HEADER_SIZE << std::endl;
     throw FMXPException(ERR_INVALID_FRAME, "Frame body size mismatch");
+  }
 
   ByteBuffer body;
 
@@ -146,7 +150,7 @@ Frame decodeFrame(const ByteBuffer& data, bool encrypted,
     body = ByteBuffer(getFrameBodyPtr(data), bodySize);
   }
 
-  if (body.size() < 12)
+  if (body.size() < __FMXP_BODY_HEADER_SIZE)
     throw FMXPException(ERR_INVALID_FRAME, "Body too small");
 
   uint32_t timestamp = getBodyTimestamp(body);
@@ -155,12 +159,12 @@ Frame decodeFrame(const ByteBuffer& data, bool encrypted,
   uint8_t status = getBodyStatus(body);
   uint16_t pathLen = getBodyPathLen(body);
 
-  if (12 + pathLen > body.size())
+  if (__FMXP_BODY_HEADER_SIZE + pathLen > body.size())
     throw FMXPException(ERR_INVALID_FRAME, "Invalid path length");
 
   ByteBuffer path(getBodyPathPtr(body), pathLen);
 
-  size_t dataLen = body.size() - 12 - pathLen;
+  size_t dataLen = body.size() - __FMXP_BODY_HEADER_SIZE - pathLen;
   ByteBuffer bodyData(getBodyDataPtr(body), dataLen);
 
   Frame f;

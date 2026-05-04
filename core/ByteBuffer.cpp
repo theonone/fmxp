@@ -144,10 +144,15 @@ void ByteBuffer::resize(size_t len) {
   _size = len;
 }
 
+/*
+Slices the buffer into a new ByteBuffer [start, end]
+*/
 ByteBuffer ByteBuffer::slice(size_t start, size_t end) const {
-  if (end > _size || start >= end)
-    throw std::out_of_range("Invalid slice range");
-  return ByteBuffer(_data + start, end - start);
+  if (end >= _size || start > end)
+    throw std::out_of_range("Invalid slice range: [" + std::to_string(start) +
+                            ", " + std::to_string(end) + "]," +
+                            " size: " + std::to_string(_size));
+  return ByteBuffer(_data + start, (end - start) + 1);
 }
 
 std::string ByteBuffer::toString() const {

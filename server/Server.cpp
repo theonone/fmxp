@@ -9,7 +9,6 @@
 #include <unistd.h>
 
 #include <cstring>
-#include <iostream>
 
 #include "../core/enc/aes.hpp"
 #include "../core/enc/rsa.hpp"

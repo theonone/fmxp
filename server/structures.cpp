@@ -4,12 +4,12 @@
 #include <unistd.h>
 
 #include <cstring>
+#include <iostream>
 
 #include "../core/enc/aes.hpp"
 #include "../core/enc/rsa.hpp"
 #include "../core/encoders.hpp"
 #include "../core/errors.hpp"
-
 namespace fmxp {
 
 std::atomic<uint64_t> ClientConnection::_connCount = 0;
@@ -64,11 +64,9 @@ void ClientConnection::setOnClose(
 
 std::vector<Frame> ClientConnection::_parseFrames() {
   std::vector<Frame> frames;
-
   while (true) {
     if (_inFrameBuffer.size() < __FMXP_MIN_FRAME_SIZE) return frames;
 
-    const uint8_t* ptr = _inFrameBuffer.cdata();
     if (!validateProtocol(_inFrameBuffer)) {  // invalid frame
       closeConnection(CloseReason::INVALID_REQUEST);
       return frames;
@@ -82,6 +80,7 @@ std::vector<Frame> ClientConnection::_parseFrames() {
     }
     if (_inFrameBuffer.size() < bodyLen + __FMXP_HEADER_SIZE)
       return frames;  // less than 1 complete frame
+    std::cout << 'a' << std::endl;
     ByteBuffer frameBuf =
         _inFrameBuffer.slice(0, bodyLen + __FMXP_HEADER_SIZE - 1);
     try {
@@ -90,14 +89,29 @@ std::vector<Frame> ClientConnection::_parseFrames() {
       if (_state == ConnectionState::HANDSHAKE) {
         Frame frame = decodeFrame(frameBuf, false, ByteBuffer());
         frames.push_back(frame);
-        _inFrameBuffer = _inFrameBuffer.slice(bodyLen + __FMXP_HEADER_SIZE,
-                                              _inFrameBuffer.size() - 1);
+        if (bodyLen + __FMXP_HEADER_SIZE < _inFrameBuffer.size()) {
+          std::cout << 'b' << std::endl;
+
+          _inFrameBuffer = _inFrameBuffer.slice(bodyLen + __FMXP_HEADER_SIZE,
+                                                _inFrameBuffer.size() - 1);
+          std::cout << 'b2' << std::endl;
+
+        } else {
+          _inFrameBuffer.clear();
+        }
         return frames;
       }
       Frame frame = decodeFrame(frameBuf, true, _aesKey);
       frames.push_back(frame);
-      _inFrameBuffer = _inFrameBuffer.slice(bodyLen + __FMXP_HEADER_SIZE,
-                                            _inFrameBuffer.size() - 1);
+      if (bodyLen + __FMXP_HEADER_SIZE < _inFrameBuffer.size()) {
+        std::cout << 'c' << std::endl;
+        _inFrameBuffer = _inFrameBuffer.slice(bodyLen + __FMXP_HEADER_SIZE,
+                                              _inFrameBuffer.size() - 1);
+        std::cout << 'c2' << std::endl;
+
+      } else {
+        _inFrameBuffer.clear();
+      }
     } catch (const FMXPException& e) {
       closeConnection(CloseReason::INVALID_REQUEST);
       return frames;
@@ -159,6 +173,7 @@ bool ClientConnection::readFd() {
         return false;
       }
       _setAesKey(decrypted);
+
     } catch (const FMXPException& e) {
       closeConnection(CloseReason::ENCRYPTION_ERROR);
       return false;
