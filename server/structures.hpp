@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -7,6 +8,7 @@
 
 #include "../core/ByteBuffer.hpp"
 #include "../core/frame.hpp"
+#include "../core/iostructs.hpp"
 
 namespace fmxp {
 
@@ -20,11 +22,11 @@ enum CloseReason {
 
 enum ConnectionState { HANDSHAKE, ACTIVE, CLOSED };
 
-struct Request;
-
 class ClientConnection {
  private:
+  static std::atomic<uint64_t> _connCount;
   int _fd = -1;
+  uint64_t _connId;
   uint64_t _maxFrameSize;
   ConnectionState _state = ConnectionState::HANDSHAKE;
   ByteBuffer _aesKey;
@@ -42,23 +44,16 @@ class ClientConnection {
                    std::function<void(Request)> onNewRequest);
   ~ClientConnection();
   void closeConnection(CloseReason reason, bool invokeOnClose = true);
-  int fd() const;
-  // bool isEncrypted() const;
+  uint64_t id() const;
   ConnectionState state() const;
-  // void appendToBuffer(const ByteBuffer& bytes);
   void setOnClose(std::function<void(int, CloseReason)> onClose);
   void sendFrame(const Frame& frame);
   bool readFd();
-};
 
-struct Request {
-  Frame frame;
-  ClientConnection* conn;
-};
-
-struct Response {
-  Frame frame;
-  ClientConnection* conn;
+  ClientConnection(const ClientConnection&) = delete;
+  ClientConnection& operator=(const ClientConnection&) = delete;
+  ClientConnection(ClientConnection&&) = delete;
+  ClientConnection& operator=(ClientConnection&&) = delete;
 };
 
 }  // namespace fmxp

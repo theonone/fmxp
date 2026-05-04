@@ -44,23 +44,28 @@ struct Header {
 
  @param id unique request identifier (not encrypted)
  @param status status code
+ @param flags flags
  @param path path to the server handle
  @param data data
+ @param timestamp UTC tz UNIX timestamp in seconds, set automatically
 */
 struct Frame {
   uint32_t id;
   uint8_t status;
   uint8_t flags = 0;
-  ByteBuffer path;
+  std::string path;
   ByteBuffer data;
   uint32_t timestamp = getTimestamp();
 };
 
-Frame makeRequestFrame(const ByteBuffer& path, const ByteBuffer& data,
+Frame makeRequestFrame(const std::string& path, const ByteBuffer& data,
                        uint8_t flags);
 
-Frame makeResponseFrame(uint8_t status, const ByteBuffer& path,
+Frame makeResponseFrame(uint8_t status, const std::string& path,
                         const ByteBuffer& data, uint8_t flags, uint32_t id);
+
+Frame makeFrame(uint32_t id, uint8_t status, uint8_t flags,
+                const std::string& path, const ByteBuffer& data);
 
 ByteBuffer encodeFrame(const Frame& frame, bool encrypt, const ByteBuffer& key);
 

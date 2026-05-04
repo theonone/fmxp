@@ -63,12 +63,17 @@ uint8_t* getBodyDataPtr(ByteBuffer& body) {
 
 uint8_t makeFlags(bool compress) { return compress ? 0x01 : 0x00; }
 
-Frame makeResponseFrame(uint8_t status, const ByteBuffer& path,
+Frame makeResponseFrame(uint8_t status, const std::string& path,
                         const ByteBuffer& data, uint8_t flags, uint32_t id) {
   return Frame{id, status, flags, path, data};
 }
 
-Frame makeRequestFrame(const ByteBuffer& path, const ByteBuffer& data,
+Frame makeFrame(uint32_t id, uint8_t status, uint8_t flags,
+                const std::string& path, const ByteBuffer& data) {
+  return {id, status, flags, path, data};
+}
+
+Frame makeRequestFrame(const std::string& path, const ByteBuffer& data,
                        uint8_t flags) {
   return Frame{++_frame_count, STATUS_REQ, flags, path, data};
 }
@@ -163,7 +168,7 @@ Frame decodeFrame(const ByteBuffer& data, bool encrypted,
   f.id = id;
   f.flags = flags;
   f.status = status;
-  f.path = std::move(path);
+  f.path = path.toString();
   f.data = std::move(bodyData);
 
   return f;

@@ -3,14 +3,37 @@
 #include <functional>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <queue>
 #include <string>
 #include <thread>
 #include <vector>
 
+#include "../core/ConcurrentQueue.hpp"
 #include "structures.hpp"
+#include "tpool.hpp"
 
 namespace fmxp {
+
+struct ServerCommand {
+  enum Type { SEND, CLOSE };
+  Type type;
+  uint64_t connID;
+  std::optional<Frame> frame;
+};
+
+/*
+@param respond respond to the request
+@param close close the connection
+*/
+struct Responder {
+  const std::function<void(const Response&)> respond;
+  const std::function<void(uint64_t)> close;
+
+  Responder(const std::function<void(const Response&)> respond,
+            const std::function<void(uint64_t)> close)
+      : respond(respond), close(close) {}
+};
 
 class Server {
  private:
@@ -19,18 +42,30 @@ class Server {
   int _maxConnections;
   int _maxFrameSize;
 
+  std::map<std::string, std::function<void(Request&, const Responder&)>>
+      _routes;
+  std::vector<std::pair<std::function<bool(const Request&)>,
+                        std::function<void(Request&, const Responder&)>>>
+      _funcRoutes;
+
   int _socket = -1;
 
   int _epollFd = -1;
 
   bool _running = false;
 
-  std::function<void(ClientConnection*)> _onConn;
+  ThreadPool _tpool;
+  ConcurrentQueue<ServerCommand> _commandQueue;
+
+  const Responder _responder;
+
+  int _cmdEvFd;
+
+  std::function<void(uint64_t)> _onConn;
   std::function<void(int, CloseReason)> _onDisconn;
 
-  std::queue<Request> _reqQueue;
-
-  std::map<int, ClientConnection*> _connections;
+  std::map<uint64_t, ClientConnection*> _connections;
+  std::map<int, uint64_t> _fdToId;
 
   void _epollLoop();
 
@@ -39,22 +74,32 @@ class Server {
 
   std::function<void(uint8_t, const std::string&)> _onErr;
 
-  std::mutex _reqQMutex;
+  std::mutex _taskMutex;
+
+  void _router(Request& req);
+
+  void _handleCommand(const ServerCommand& cmd);
 
  public:
-  Server(int port, std::string privKey, int maxConnections = 1024,
-         int maxFrameSize = 64 * 1024);
+  Server(int port, std::string privKey, size_t workerThreads,
+         int maxConnections = 1024, int maxFrameSize = 64 * 1024);
 
   ~Server();
 
-  //   void route(const std::string& path,
-  //              std::function<void(Request&, Responder&)> handler);
+  void route(const std::string& path,
+             std::function<void(Request&, const Responder&)> handler);
 
-  //   void route(std::function<bool(const Request&)> matcher,
-  //              std::function<void(Request&, Responder&)> handler);
+  void route(std::function<bool(const Request&)> matcher,
+             std::function<void(Request&, const Responder&)> handler);
+
+  void sendTo(uint64_t connectionID, const Response& resp);
+
+  void closeConnection(uint64_t connectionID);
 
   void listen();
   void stop();
+
+  friend struct Responder;
 };
 
 }  // namespace fmxp

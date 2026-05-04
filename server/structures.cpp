@@ -12,19 +12,22 @@
 
 namespace fmxp {
 
+std::atomic<uint64_t> ClientConnection::_connCount = 0;
+
 ClientConnection::ClientConnection(int fd, uint64_t maxFrameSize,
                                    const std::string& rsaPrivKey,
                                    std::function<void(Request)> onNewRequest)
     : _fd(fd),
       _maxFrameSize(maxFrameSize),
       _onNewRequest(onNewRequest),
-      _rsaPrivKey(rsaPrivKey) {}
+      _rsaPrivKey(rsaPrivKey) {
+  _connId = ++_connCount;
+}
 
 ClientConnection::~ClientConnection() { closeConnection(CloseReason::NATURAL); }
 
 void ClientConnection::closeConnection(CloseReason reason, bool invokeOnClose) {
   if (_state == ConnectionState::CLOSED) return;
-  int oldFd = _fd;
   if (_fd != -1) {
     close(_fd);
     _fd = -1;
@@ -32,16 +35,16 @@ void ClientConnection::closeConnection(CloseReason reason, bool invokeOnClose) {
   _state = ConnectionState::CLOSED;
 
   if (invokeOnClose && _onClose) {
-    _onClose(oldFd, reason);
+    _onClose(_connId, reason);
   }
 }
 
-int ClientConnection::fd() const { return _fd; }
+uint64_t ClientConnection::id() const { return _connId; }
 
 void ClientConnection::_setAesKey(const ByteBuffer& aesKey) {
   _aesKey = aesKey;
-  auto frame = makeResponseFrame(STATUS_OK, ByteBuffer(),
-                                 ByteBuffer("Connection secured"), 0, 0);
+  auto frame =
+      makeResponseFrame(STATUS_OK, "", ByteBuffer("Connection secured"), 0, 0);
   sendFrame(frame);
   _state = ConnectionState::ACTIVE;
 }
@@ -161,10 +164,10 @@ bool ClientConnection::readFd() {
     }
   } else if (_state == ConnectionState::ACTIVE) {
     for (const auto& frame : frames) {
-      _onNewRequest(Request{frame, this});
       if (!_validateFrame(frame)) {
         return false;
       }
+      _onNewRequest(Request(IOFrame{frame, _connId}));
     }
   }
   return true;
