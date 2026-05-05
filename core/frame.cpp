@@ -1,7 +1,6 @@
 #include "frame.hpp"
 
 #include <cstring>
-#include <iostream>
 #include <stdexcept>
 #include <string>
 
@@ -136,8 +135,6 @@ Frame decodeFrame(const ByteBuffer& data, bool encrypted,
   uint64_t bodySize = getFrameBodySize(data);
 
   if (bodySize != size - __FMXP_HEADER_SIZE) {
-    std::cout << "bodySize: " << bodySize
-              << ", size: " << size - __FMXP_HEADER_SIZE << std::endl;
     throw FMXPException(ERR_INVALID_FRAME, "Frame body size mismatch");
   }
 

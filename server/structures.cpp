@@ -80,38 +80,25 @@ std::vector<Frame> ClientConnection::_parseFrames() {
     }
     if (_inFrameBuffer.size() < bodyLen + __FMXP_HEADER_SIZE)
       return frames;  // less than 1 complete frame
-    std::cout << 'a' << std::endl;
-    ByteBuffer frameBuf =
-        _inFrameBuffer.slice(0, bodyLen + __FMXP_HEADER_SIZE - 1);
+    ByteBuffer frameBuf = _inFrameBuffer.slice(
+        0, bodyLen + __FMXP_HEADER_SIZE);  // problematic line
     try {
       // if AES key not yet set, parse just ONE frame, return. the client is
       // expected to wait for the handshake to complete before sending requests
       if (_state == ConnectionState::HANDSHAKE) {
         Frame frame = decodeFrame(frameBuf, false, ByteBuffer());
         frames.push_back(frame);
-        if (bodyLen + __FMXP_HEADER_SIZE < _inFrameBuffer.size()) {
-          std::cout << 'b' << std::endl;
 
-          _inFrameBuffer = _inFrameBuffer.slice(bodyLen + __FMXP_HEADER_SIZE,
-                                                _inFrameBuffer.size() - 1);
-          std::cout << 'b2' << std::endl;
+        _inFrameBuffer = _inFrameBuffer.slice(bodyLen + __FMXP_HEADER_SIZE,
+                                              _inFrameBuffer.size());
 
-        } else {
-          _inFrameBuffer.clear();
-        }
         return frames;
       }
       Frame frame = decodeFrame(frameBuf, true, _aesKey);
       frames.push_back(frame);
-      if (bodyLen + __FMXP_HEADER_SIZE < _inFrameBuffer.size()) {
-        std::cout << 'c' << std::endl;
-        _inFrameBuffer = _inFrameBuffer.slice(bodyLen + __FMXP_HEADER_SIZE,
-                                              _inFrameBuffer.size() - 1);
-        std::cout << 'c2' << std::endl;
+      _inFrameBuffer = _inFrameBuffer.slice(bodyLen + __FMXP_HEADER_SIZE,
+                                            _inFrameBuffer.size());
 
-      } else {
-        _inFrameBuffer.clear();
-      }
     } catch (const FMXPException& e) {
       closeConnection(CloseReason::INVALID_REQUEST);
       return frames;

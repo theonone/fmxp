@@ -1,5 +1,7 @@
 #include "tpool.hpp"
 
+#include <iostream>
+
 namespace fmxp {
 
 ThreadPool::ThreadPool(size_t threads) {

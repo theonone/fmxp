@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include <cstring>
+#include <iostream>
 
 #include "../core/enc/aes.hpp"
 #include "../core/enc/rsa.hpp"
@@ -233,6 +234,7 @@ void Server::_epollLoop() {
         bool ok = conn->readFd();
 
         if (!ok || (conn->state() == ConnectionState::CLOSED)) {
+          std::cout << "deleting connection" << std::endl;
           delete conn;
           _connections.erase(it2);
         }
@@ -241,7 +243,9 @@ void Server::_epollLoop() {
   }
 }
 void Server::_onRequest(Request req) {
-  _tpool.enqueue([this, &req]() { _router(req); });
+  std::cout << "enqueuing request" << std::endl;
+  _tpool.enqueue([this, req = std::move(req)]() { _router(req); });
+  std::cout << "enqueued request" << std::endl;
 }
 
 void Server::_defaultErrorHandler(uint8_t code, const std::string& message) {

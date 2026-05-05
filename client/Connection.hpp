@@ -56,7 +56,8 @@ class Connection {
 
  public:
   Connection(const std::string& host, int port, const std::string& pubKey,
-             uint64_t maxFrameSize);
+             uint64_t maxFrameSize,
+             std::function<void(const Response&)> onResponse);
   ~Connection();
 
   void setOnResponse(std::function<void(const Response&)> cb);

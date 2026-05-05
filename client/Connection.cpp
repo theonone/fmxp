@@ -18,8 +18,13 @@
 namespace fmxp {
 
 Connection::Connection(const std::string& host, int port,
-                       const std::string& pubKey, uint64_t maxFrameSize)
-    : _host(host), _port(port), _pubKey(pubKey), _maxFrameSize(maxFrameSize) {
+                       const std::string& pubKey, uint64_t maxFrameSize,
+                       std::function<void(const Response&)> onResponse)
+    : _host(host),
+      _port(port),
+      _pubKey(pubKey),
+      _maxFrameSize(maxFrameSize),
+      _onResponse(std::move(onResponse)) {
   _connect();
 }
 
@@ -103,32 +108,25 @@ std::vector<Frame> Connection::_parseFrames() {
     }
     if (_frameBuffer.size() < bodyLen + __FMXP_HEADER_SIZE)
       return frames;  // less than 1 complete frame
-    ByteBuffer frameBuf =
-        _frameBuffer.slice(0, bodyLen + __FMXP_HEADER_SIZE - 1);
+    ByteBuffer frameBuf = _frameBuffer.slice(0, bodyLen + __FMXP_HEADER_SIZE);
     try {
       Frame frame = decodeFrame(frameBuf, true, _aesKey);
       if (_state == ConnectionState::HANDSHAKE) {
         if (frame.data.toString() == "Connection secured") {
           std::cout << "Handshake complete, connection secured." << std::endl;
           _state = ConnectionState::CONNECTED;
-          if (bodyLen + __FMXP_HEADER_SIZE < _frameBuffer.size()) {
-            _frameBuffer = _frameBuffer.slice(bodyLen + __FMXP_HEADER_SIZE,
-                                              _frameBuffer.size() - 1);
-          } else {
-            _frameBuffer.clear();
-          }
+          _frameBuffer = _frameBuffer.slice(bodyLen + __FMXP_HEADER_SIZE,
+                                            _frameBuffer.size());
+
           continue;
         }
         throwErr(ERR_CONNECTION, "Handshake failed");
       }
 
       frames.push_back(frame);
-      if (bodyLen + __FMXP_HEADER_SIZE < _frameBuffer.size()) {
-        _frameBuffer = _frameBuffer.slice(bodyLen + __FMXP_HEADER_SIZE,
-                                          _frameBuffer.size() - 1);
-      } else {
-        _frameBuffer.clear();
-      }
+      _frameBuffer =
+          _frameBuffer.slice(bodyLen + __FMXP_HEADER_SIZE, _frameBuffer.size());
+
     } catch (const FMXPException& e) {
       close();
       return frames;
@@ -188,7 +186,6 @@ void Connection::_handleCommand(const ClientCommand& cmd) {
     // normal sending logic
     ByteBuffer encoded = encodeFrame(cmd.frame.value(), true, _aesKey);
     ::send(_socket, encoded.cdata(), encoded.size(), 0);
-    std::cout << "Sent " << encoded.size() << " bytes" << std::endl;
 
   } else if (cmd.type == ClientCommand::Type::CLOSE) {
     close();
@@ -231,8 +228,6 @@ void Connection::_epollLoop() {
         if (events[i].events & EPOLLIN) {
           char buffer[4096];
           ssize_t len = recv(_socket, buffer, sizeof(buffer), 0);
-
-          std::cout << "Received " << len << " bytes" << std::endl;
 
           if (len <= 0) {
             _running = false;
