@@ -9,7 +9,6 @@
 #include <unistd.h>
 
 #include <cstring>
-#include <iostream>
 
 #include "../core/enc/aes.hpp"
 #include "../core/enc/rsa.hpp"
@@ -39,7 +38,6 @@ void Connection::setOnResponse(std::function<void(const Response&)> cb) {
 // }
 
 void Connection::_connect() {
-  std::cout << "Creating socket..." << std::endl;
   _socket = socket(AF_INET, SOCK_STREAM, 0);
   if (_socket < 0) {
     throwErr(ERR_CONNECTION, "socket failed");
@@ -53,14 +51,12 @@ void Connection::_connect() {
     throwErr(ERR_CONNECTION, "invalid address");
   }
 
-  std::cout << "Connecting to " << _host << ":" << _port << "..." << std::endl;
   if (::connect(_socket, (sockaddr*)&addr, sizeof(addr)) < 0) {
     throwErr(ERR_CONNECTION, "connect failed");
   }
 
   fcntl(_socket, F_SETFL, O_NONBLOCK);
 
-  std::cout << "Creating epoll and fd..." << std::endl;
   _epollFd = epoll_create1(0);
   if (_epollFd < 0) {
     throwErr(ERR_CONNECTION, "epoll_create failed");
@@ -85,7 +81,6 @@ void Connection::_connect() {
   }
 
   _running = true;
-  std::cout << "Starting epoll loop..." << std::endl;
   _epollThread = std::thread(&Connection::_epollLoop, this);
 }
 
@@ -113,7 +108,6 @@ std::vector<Frame> Connection::_parseFrames() {
       Frame frame = decodeFrame(frameBuf, true, _aesKey);
       if (_state == ConnectionState::HANDSHAKE) {
         if (frame.data.toString() == "Connection secured") {
-          std::cout << "Handshake complete, connection secured." << std::endl;
           _state = ConnectionState::CONNECTED;
           _frameBuffer = _frameBuffer.slice(bodyLen + __FMXP_HEADER_SIZE,
                                             _frameBuffer.size());
@@ -179,7 +173,6 @@ void Connection::_handleCommand(const ClientCommand& cmd) {
       // the only frame we don't encrypt here
       toBeSent = encodeFrame(cmd.frame.value(), false, ByteBuffer());
       ::send(_socket, toBeSent.cdata(), toBeSent.size(), 0);
-      std::cout << "Handshake sent" << std::endl;
       return;
     }
 
@@ -195,7 +188,6 @@ void Connection::_handleCommand(const ClientCommand& cmd) {
 void Connection::_epollLoop() {
   epoll_event events[32];
 
-  std::cout << "Handshaking..." << std::endl;
   _doHandshake();
 
   while (_running) {

@@ -44,7 +44,7 @@ class Connection {
   ByteBuffer _frameBuffer;
 
   std::function<void(const Response&)> _onResponse;
-  //   std::function<void(uint8_t)> _onClose;
+  std::function<void()> _onClose;
 
   void _epollLoop();
   void _handleCommand(const ClientCommand& cmd);
