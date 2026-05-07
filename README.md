@@ -1,6 +1,6 @@
 # FMXP (Framed Message eXchange Protocol)
 
-> Version 0.1, __FMXP_VERSION 1
+> Version 0.1.1, __FMXP_VERSION 2
 
 **FMXP** is a lightweight, TCP-based protocol for efficient, secure, and easy-to-use bidirectional communication between clients and servers.
 
@@ -13,7 +13,7 @@ It is designed for application-level communication, prioritizing simplicity, per
 ## ✨ Features
 
 - Simple and minimal API
-- Low protocol overhead (52 bytes per frame, 24 without encryption)
+- Low protocol overhead (48 bytes per frame, 20 without encryption)
 - AES-256-GCM authenticated encryption, RSA-2048 OAEP encrypted key exchange
 - Flexible request-response routing
 - Epoll-based high-performance I/O
@@ -55,6 +55,11 @@ int main() {
       responder.respond(fmxp::Response(req, "", fmxp::STATUS_NOT_FOUND));
     });
 
+  server.setOnError([](uint8_t code, const std::string& message) {
+    std::cout << "Error: " << code << ": " << message << std::endl;
+    return true;
+  });
+
   server.listen();
 }
 ````
@@ -65,6 +70,7 @@ int main() {
 
 ```cpp
 #include <iostream>
+
 #include "Connection.hpp"
 
 using namespace fmxp;
@@ -73,20 +79,46 @@ int main() {
   std::string pubKey = ...;
 
   Connection connection(
-    "127.0.0.1",
-    8080,
-    pubKey,
-    64 * 1024,
-    [](const Response& r) {
-      if (r.status() == STATUS_NOT_FOUND) {
-        std::cout << "Route not found\n";
-        return;
+      "127.0.0.1", 8080, pubKey, 64 * 1024, [](const Response& r) {
+        if (r.status() == fmxp::STATUS_NOT_FOUND) {
+          std::cout << "Route not found" << std::endl;
+          return;
+        }
+
+        std::cout << r.path() << ", " << r.data().toString() << std::endl;
+      });
+  connection.setOnClose([]() {
+    std::cout << "Connection closed!" << std::endl;
+    exit(0);
+  });
+  while (true) {
+    std::string line;
+    std::getline(std::cin, line);
+
+    if (line == "exit") {
+      connection.close();
+      std::cout << "Connection closed" << std::endl;
+      break;
+    } else if (line.substr(0, 5) == "send ") {
+      std::string args = line.substr(5);
+      size_t whitespace = args.find(' ');
+      if (whitespace == std::string::npos) {
+        std::cout << "Invalid command" << std::endl;
+        continue;
       }
+      std::string path = args.substr(0, whitespace);
+      args = args.substr(whitespace + 1);
+      std::string data = args;
+      if (!connection.send(Request(path, data))) {
+        std::cout << "Send failed!" << std::endl;
+        break;
+      }
+    } else {
+      std::cout << "Unknown command" << std::endl;
+    }
+  }
 
-      std::cout << r.path() << ", " << r.data().toString() << std::endl;
-    });
-
-  connection.send(Request("/echo", "hello"));
+  return 0;
 }
 ```
 
@@ -105,7 +137,7 @@ int main() {
 
 ```
 fmxp<version:1B>
-     <size:8B>
+     <size:4B>
      <timestamp:4B>
      <f_id:4B>
      <flags:1B>
@@ -121,7 +153,7 @@ fmxp<version:1B>
 
 * **fmxp** → protocol identifier
 * **version** → protocol version (must match exactly)
-* **size** → total size of the following data. Every field after this one is encrypted. The field is a 64-bit unsigned integer, so the max possible frame size is 16 exabytes
+* **size** → total size of the following data. Every field after this one is encrypted. The field is a 32-bit unsigned integer, so the max possible frame size is around 4GB
 * **timestamp** → UNIX UTC timestamp for replay protection
 * **f_id** → request/response identifier
 * **flags** → protocol-level flags
@@ -278,8 +310,8 @@ If an attacker replaces the server’s public key in the client, security might 
 
 * Overhead:
 
-  * 52 bytes (encrypted)
-  * 24 bytes (unencrypted)
+  * 48 bytes (encrypted)
+  * 20 bytes (unencrypted)
 * Buffered I/O ensures only complete frames are processed
 * Epoll enables scalable connection handling
 
@@ -292,8 +324,6 @@ GNU General Public License v3
 ---
 
 ## 🔮 Future Plans
-
-* Improved error handling
 * Optional insecure mode (e.g. for IPC)
 * Synchronous request API (`Connection.request(...)`)
 * One-time request API (like requests.get(...) in Python)

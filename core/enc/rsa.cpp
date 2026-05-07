@@ -91,7 +91,6 @@ ByteBuffer rsaEncrypt(const ByteBuffer& plaintext,
   ByteBuffer out;
   out.reserve(outLen);
 
-  // we need raw storage
   std::vector<uint8_t> tmp(outLen);
 
   if (EVP_PKEY_encrypt(ctx, tmp.data(), &outLen, plaintext.cdata(),

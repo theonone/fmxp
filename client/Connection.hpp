@@ -34,7 +34,7 @@ class Connection {
   int _socket = -1;
   int _epollFd = -1;
   int _cmdEvFd = -1;
-  uint64_t _maxFrameSize;
+  uint32_t _maxFrameSize;
 
   std::atomic<bool> _running = false;
   std::thread _epollThread;
@@ -56,14 +56,17 @@ class Connection {
 
  public:
   Connection(const std::string& host, int port, const std::string& pubKey,
-             uint64_t maxFrameSize,
+             uint32_t maxFrameSize,
              std::function<void(const Response&)> onResponse);
   ~Connection();
 
   void setOnResponse(std::function<void(const Response&)> cb);
-  //   void setOnClose(std::function<void(uint8_t)> cb);
+  void setOnClose(std::function<void()> cb);
 
-  void send(const Request& req);
+  /*
+   * Send a request, returns false if connection is closed
+   */
+  bool send(const Request& req);
   void close();
 };
 

@@ -11,10 +11,10 @@
 
 namespace fmxp {
 
-// fmxp<version:1b><size:8b><timestamp:4b><f_id:4b><flags:1b><status:1b><path_len:2b><path><data>
+// fmxp<version:1b><size:4b><timestamp:4b><f_id:4b><flags:1b><status:1b><path_len:2b><path><data>
 
-uint64_t getFrameBodySize(const ByteBuffer& encoded) {
-  return ptrToU64(encoded.cdata() + 5);
+uint32_t getFrameBodySize(const ByteBuffer& encoded) {
+  return ptrToU32(encoded.cdata() + 5);
 }
 
 uint8_t getFrameVersion(const ByteBuffer& encoded) {
@@ -26,7 +26,7 @@ bool validateProtocol(const ByteBuffer& encoded) {
 }
 
 const uint8_t* getFrameBodyPtr(const ByteBuffer& encoded) {
-  return encoded.cdata() + 5 + 8;
+  return encoded.cdata() + 9;
 }
 
 uint32_t getBodyTimestamp(const ByteBuffer& body) {
@@ -79,7 +79,7 @@ Frame makeRequestFrame(const std::string& path, const ByteBuffer& data,
 }
 
 // encoding:
-// fmxp<version:1b><size:8b><timestamp:4b><f_id:4b><flags:1b><status:1b><path_len:2b><path><data>
+// fmxp<version:1b><size:4b><timestamp:4b><f_id:4b><flags:1b><status:1b><path_len:2b><path><data>
 ByteBuffer encodeFrame(const Frame& frame, bool encrypt,
                        const ByteBuffer& key) {
   ByteBuffer encoded;
@@ -99,25 +99,26 @@ ByteBuffer encodeFrame(const Frame& frame, bool encrypt,
     body = aesEncrypt(body, key);
   }
 
-  encoded += u64ToStr(body.size());
+  encoded += u32ToStr(body.size());
   encoded += body;
 
   return encoded;
 }
 
-// fmxp<version:1b><size:8b><timestamp:4b><f_id:4b><flags:1b><status:1b><path_len:2b><path><data>
+// fmxp<version:1b><size:4b><timestamp:4b><f_id:4b><flags:1b><status:1b><path_len:2b><path><data>
 /*
 offsets:
 fmxp - 0
 version - 4
 size - 5
-timestamp - 5+8
-id - 17
-flags - 21
-status - 22
-path_len - 23
-path - 25
-data - 25 + path_len
+body - 9, next relative to body
+timestamp - 0
+id - 4
+flags - 8
+status - 9
+path_len - 10
+path - 12
+data - 12 + path_len
 */
 Frame decodeFrame(const ByteBuffer& data, bool encrypted,
                   const ByteBuffer& key) {
@@ -132,7 +133,7 @@ Frame decodeFrame(const ByteBuffer& data, bool encrypted,
   if (getFrameVersion(data) != __FMXP_VERSION)
     throw FMXPException(ERR_INVALID_FRAME, "Protocol version mismatch");
 
-  uint64_t bodySize = getFrameBodySize(data);
+  uint32_t bodySize = getFrameBodySize(data);
 
   if (bodySize != size - __FMXP_HEADER_SIZE) {
     throw FMXPException(ERR_INVALID_FRAME, "Frame body size mismatch");

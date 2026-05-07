@@ -99,6 +99,12 @@ class Server {
   void listen();
   void stop();
 
+  /*
+  Set a custom error handler. If the callback returns false, the default error
+  handler will be called afterwards
+  */
+  void setOnError(std::function<bool(uint8_t, const std::string&)> cb);
+
   friend struct Responder;
 };
 

@@ -28,9 +28,7 @@ void Server::_router(Request req) {
       }
     }
 
-    _defaultErrorHandler(
-        ERR_ROUTE_NOT_FOUND,
-        encodeFrame(req.toFrame(), false, ByteBuffer()).toString());
+    _responder.respond(Response(req, "", fmxp::STATUS_NOT_FOUND));
   }
 }
 
@@ -161,6 +159,15 @@ void Server::stop() {
   if (_epollFd != -1) close(_epollFd);
 }
 
+void Server::setOnError(std::function<bool(uint8_t, const std::string&)> cb) {
+  _onErr = [this, cb = std::move(cb)](uint8_t code,
+                                      const std::string& message) {
+    if (!cb(code, message)) {
+      _defaultErrorHandler(code, message);
+    }
+  };
+}
+
 void Server::_epollLoop() {
   epoll_event events[64];
 
@@ -245,12 +252,6 @@ void Server::_onRequest(Request req) {
 }
 
 void Server::_defaultErrorHandler(uint8_t code, const std::string& message) {
-  if (code == ERR_ROUTE_NOT_FOUND) {
-    Frame f = decodeFrame(ByteBuffer(message), false, ByteBuffer());
-    _responder.respond(
-        Response(f.id, f.path, "Route not found", STATUS_NOT_FOUND));
-    return;
-  }
   throw FMXPException(code, message);
 }
 }  // namespace fmxp

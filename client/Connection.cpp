@@ -17,7 +17,7 @@
 namespace fmxp {
 
 Connection::Connection(const std::string& host, int port,
-                       const std::string& pubKey, uint64_t maxFrameSize,
+                       const std::string& pubKey, uint32_t maxFrameSize,
                        std::function<void(const Response&)> onResponse)
     : _host(host),
       _port(port),
@@ -31,6 +31,10 @@ Connection::~Connection() { close(); }
 
 void Connection::setOnResponse(std::function<void(const Response&)> cb) {
   _onResponse = std::move(cb);
+}
+
+void Connection::setOnClose(std::function<void()> cb) {
+  _onClose = std::move(cb);
 }
 
 // void Connection::setOnError(std::function<void(uint8_t)> cb) {
@@ -94,8 +98,10 @@ std::vector<Frame> Connection::_parseFrames() {
       close();
       return frames;
     }
-    uint64_t bodyLen = getFrameBodySize(_frameBuffer);
-    if (bodyLen + __FMXP_HEADER_SIZE > _maxFrameSize) {
+    uint32_t bodyLen = getFrameBodySize(_frameBuffer);
+    if (bodyLen > _maxFrameSize ||
+        bodyLen + __FMXP_HEADER_SIZE >
+            _maxFrameSize) {  // OR is for overflow protection
       close();
       // cannot just decline, because in order to reject the rest, we have to
       // receive it
@@ -135,15 +141,21 @@ void Connection::_doHandshake() {
                   .frame = Request("", encedKey).toFrame()});
 }
 
-void Connection::send(const Request& req) {
+bool Connection::send(const Request& req) {
+  if (!_running || _state == ConnectionState::CLOSED) return false;
   _commandQueue.push({ClientCommand::Type::SEND, req.toFrame()});
 
   uint64_t one = 1;
   write(_cmdEvFd, &one, sizeof(one));
+
+  return true;
 }
 
 void Connection::close() {
-  if (!_running) return;
+  if (!_running || _state == ConnectionState::CLOSED) return;
+
+  if (_onClose) _onClose();
+  _state = ConnectionState::CLOSED;
 
   _running = false;
 
@@ -210,9 +222,7 @@ void Connection::_epollLoop() {
       if (fd == _socket) {
         // disconnect
         if (events[i].events & (EPOLLRDHUP | EPOLLHUP)) {
-          _running = false;
-          //   if (_onClose) _onClose();
-          _state = ConnectionState::CLOSED;
+          close();
           continue;
         }
 

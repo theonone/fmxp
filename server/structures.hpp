@@ -69,7 +69,7 @@ class ClientConnection {
   static std::atomic<uint64_t> _connCount;
   int _fd = -1;
   uint64_t _connId;
-  uint64_t _maxFrameSize;
+  uint32_t _maxFrameSize;
   ConnectionState _state = ConnectionState::HANDSHAKE;
   ByteBuffer _aesKey;
   ByteBuffer _inFrameBuffer;
@@ -82,7 +82,7 @@ class ClientConnection {
   bool _validateFrame(const Frame& frame);
 
  public:
-  ClientConnection(int fd, uint64_t maxFrameSize, const std::string& rsaPrivKey,
+  ClientConnection(int fd, uint32_t maxFrameSize, const std::string& rsaPrivKey,
                    std::function<void(Request)> onNewRequest);
   ~ClientConnection();
   void closeConnection(CloseReason reason, bool invokeOnClose = true);

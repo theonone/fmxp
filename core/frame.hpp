@@ -8,7 +8,7 @@
 
 namespace fmxp {
 
-constexpr uint8_t __FMXP_VERSION = 1;
+constexpr uint8_t __FMXP_VERSION = 2;
 
 static std::atomic<uint32_t> _frame_count = 0;
 
@@ -20,8 +20,8 @@ constexpr uint8_t STATUS_NOT_FOUND = 4;
 constexpr uint8_t STATUS_UNAUTHORIZED = 5;
 constexpr uint8_t STATUS_FORBIDDEN = 6;
 
-// fmxp<version:1b><size:8b><timestamp:4b><f_id:4b><flags:1b><status:1b><path_len:2b><path><data>
-constexpr size_t __FMXP_HEADER_SIZE = 5 + 8;
+// fmxp<version:1b><size:4b><timestamp:4b><f_id:4b><flags:1b><status:1b><path_len:2b><path><data>
+constexpr size_t __FMXP_HEADER_SIZE = 9;
 constexpr size_t __FMXP_BODY_HEADER_SIZE =
     12;  // timestamp + id + flags + status + path_len
 constexpr size_t __FMXP_MIN_FRAME_SIZE =
@@ -35,7 +35,7 @@ constexpr size_t __FMXP_MIN_FRAME_SIZE =
  @param version protocol version (not encrypted)
 */
 struct Header {
-  uint64_t length = 0;
+  uint32_t length = 0;
   uint8_t version = __FMXP_VERSION;
 };
 
@@ -73,7 +73,7 @@ ByteBuffer encodeFrame(const Frame& frame, bool encrypt, const ByteBuffer& key);
 Frame decodeFrame(const ByteBuffer& data, bool encrypted,
                   const ByteBuffer& key);
 
-uint64_t getFrameBodySize(const ByteBuffer& encoded);
+uint32_t getFrameBodySize(const ByteBuffer& encoded);
 
 uint32_t getBodyId(const ByteBuffer& encoded);
 

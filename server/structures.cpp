@@ -13,7 +13,7 @@ namespace fmxp {
 
 std::atomic<uint64_t> ClientConnection::_connCount = 0;
 
-ClientConnection::ClientConnection(int fd, uint64_t maxFrameSize,
+ClientConnection::ClientConnection(int fd, uint32_t maxFrameSize,
                                    const std::string& rsaPrivKey,
                                    std::function<void(Request)> onNewRequest)
     : _fd(fd),
@@ -28,6 +28,9 @@ ClientConnection::~ClientConnection() { closeConnection(CloseReason::NATURAL); }
 void ClientConnection::closeConnection(CloseReason reason, bool invokeOnClose) {
   if (_state == ConnectionState::CLOSED) return;
   if (_fd != -1) {
+    if (reason != CloseReason::NATURAL) {
+      sendFrame(makeFrame(0, STATUS_BAD_REQ, 0, "", std::to_string(reason)));
+    }
     close(_fd);
     _fd = -1;
   }
@@ -70,7 +73,7 @@ std::vector<Frame> ClientConnection::_parseFrames() {
       closeConnection(CloseReason::INVALID_REQUEST);
       return frames;
     }
-    uint64_t bodyLen = getFrameBodySize(_inFrameBuffer);
+    uint32_t bodyLen = getFrameBodySize(_inFrameBuffer);
     if (bodyLen + __FMXP_HEADER_SIZE > _maxFrameSize) {
       closeConnection(CloseReason::REQUEST_TOO_LONG);
       // cannot just decline, because in order to reject the rest, we have to
@@ -79,8 +82,7 @@ std::vector<Frame> ClientConnection::_parseFrames() {
     }
     if (_inFrameBuffer.size() < bodyLen + __FMXP_HEADER_SIZE)
       return frames;  // less than 1 complete frame
-    ByteBuffer frameBuf = _inFrameBuffer.slice(
-        0, bodyLen + __FMXP_HEADER_SIZE);  // problematic line
+    ByteBuffer frameBuf = _inFrameBuffer.slice(0, bodyLen + __FMXP_HEADER_SIZE);
     try {
       // if AES key not yet set, parse just ONE frame, return. the client is
       // expected to wait for the handshake to complete before sending requests
@@ -101,6 +103,9 @@ std::vector<Frame> ClientConnection::_parseFrames() {
     } catch (const FMXPException& e) {
       closeConnection(CloseReason::INVALID_REQUEST);
       return frames;
+    } catch (const std::runtime_error& e) {
+      closeConnection(CloseReason::INVALID_REQUEST);
+      return frames;
     }
   }
 }
@@ -115,18 +120,24 @@ bool ClientConnection::_validateFrame(const Frame& frame) {
 }
 
 void ClientConnection::sendFrame(const Frame& frame) {
-  ByteBuffer encoded = encodeFrame(frame, true, _aesKey);
-  size_t total = 0;
-  while (total < encoded.size()) {
-    ssize_t sent =
-        send(_fd, encoded.cdata() + total, encoded.size() - total, 0);
+  try {
+    ByteBuffer encoded = encodeFrame(frame, true, _aesKey);
 
-    if (sent <= 0) {
-      closeConnection(CloseReason::SOCKET_ERROR);
-      return;
+    size_t total = 0;
+    while (total < encoded.size()) {
+      ssize_t sent =
+          send(_fd, encoded.cdata() + total, encoded.size() - total, 0);
+
+      if (sent <= 0) {
+        closeConnection(CloseReason::SOCKET_ERROR);
+        return;
+      }
+
+      total += sent;
     }
-
-    total += sent;
+  } catch (const std::runtime_error& e) {
+    closeConnection(CloseReason::ENCRYPTION_ERROR);
+    return;
   }
 }
 
@@ -160,7 +171,7 @@ bool ClientConnection::readFd() {
       }
       _setAesKey(decrypted);
 
-    } catch (const FMXPException& e) {
+    } catch (const std::runtime_error& e) {
       closeConnection(CloseReason::ENCRYPTION_ERROR);
       return false;
     }
