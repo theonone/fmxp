@@ -54,8 +54,7 @@ class Response {
   Response(const Request& request, const ByteBuffer& data,
            uint8_t status = STATUS_OK);
   Response(uint64_t connectionID, const std::string& path,
-           const std::string& message, uint32_t rid,
-           uint8_t status = STATUS_OK);
+           const ByteBuffer& data, uint32_t rid, uint8_t status = STATUS_OK);
   uint64_t connectionID() const;
   const std::string& path() const;
   const ByteBuffer& data() const;

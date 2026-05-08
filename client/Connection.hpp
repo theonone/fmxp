@@ -75,7 +75,8 @@ class Connection {
   /*
    * Send a request, returns false if connection is closed
    */
-  bool send(const Request& req);
+  bool sendReq(const Request& req);
+  bool send(const std::string& path, const ByteBuffer& data);
   void close();
 };
 

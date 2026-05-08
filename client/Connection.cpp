@@ -158,10 +158,20 @@ bool Connection::_validateFrame(const Frame& frame) {
   return true;
 }
 
-bool Connection::send(const Request& req) {
+bool Connection::sendReq(const Request& req) {
   if (!_running || _state == ConnectionState::CLOSED) return false;
   _commandQueue.push(
       {ClientCommand::Type::SEND, _makeReqFrame(req.path(), req.data(), 0)});
+
+  uint64_t one = 1;
+  write(_cmdEvFd, &one, sizeof(one));
+
+  return true;
+}
+
+bool Connection::send(const std::string& path, const ByteBuffer& data) {
+  if (!_running || _state == ConnectionState::CLOSED) return false;
+  _commandQueue.push({ClientCommand::Type::SEND, _makeReqFrame(path, data, 0)});
 
   uint64_t one = 1;
   write(_cmdEvFd, &one, sizeof(one));
@@ -268,7 +278,6 @@ void Connection::_epollLoop() {
               break;
             }
 
-            // append received chunk
             _frameBuffer.append(reinterpret_cast<uint8_t*>(buf),
                                 static_cast<size_t>(bytes));
           }

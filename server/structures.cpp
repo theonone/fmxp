@@ -233,8 +233,12 @@ Response::Response(const Request& request, const ByteBuffer& data,
       _rid(request.rid()) {}
 
 Response::Response(uint64_t connectionID, const std::string& path,
-                   const std::string& message, uint32_t rid, uint8_t status)
-    : _connID(connectionID), _path(path), _status(status), _rid(rid) {}
+                   const ByteBuffer& data, uint32_t rid, uint8_t status)
+    : _connID(connectionID),
+      _path(path),
+      _status(status),
+      _rid(rid),
+      _data(data) {}
 
 uint64_t Response::connectionID() const { return _connID; }
 

@@ -28,7 +28,7 @@ void Server::_router(Request req) {
       }
     }
 
-    _responder.respond(Response(req, "", fmxp::STATUS_NOT_FOUND));
+    _responder.respond(req, "", fmxp::STATUS_NOT_FOUND);
   }
 }
 
@@ -60,8 +60,17 @@ Server::Server(int port, std::string privKey, size_t workerThreads,
       _maxConnections(maxConnections),
       _maxFrameSize(maxFrameSize),
       _tpool(workerThreads),
-      _responder([this](const Response& resp) { sendResponse(resp); },
-                 [this](uint64_t connID) { closeConnection(connID); }) {
+      _responder(
+          [this](const Request& req, const ByteBuffer& data, uint8_t status) {
+            auto r = Response(req, data, status);
+            sendResponse(std::move(r));
+          },
+          [this](uint64_t connID) { closeConnection(connID); },
+          [this](uint64_t connID, const std::string& path,
+                 const ByteBuffer& data, uint8_t status) {
+            auto r = Response(connID, path, data, 0, status);
+            sendResponse(std::move(r));
+          }) {
   _onErr = [this](uint8_t code, const std::string& message) {
     _defaultErrorHandler(code, message);
   };

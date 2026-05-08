@@ -24,15 +24,24 @@ struct ServerCommand {
 
 /*
 @param respond respond to the request
+@param serverPush push a frame to the client
 @param close close the connection
 */
 struct Responder {
-  const std::function<void(const Response&)> respond;
+  const std::function<void(const Request&, const ByteBuffer&, uint8_t)> respond;
   const std::function<void(uint64_t)> close;
+  const std::function<void(uint64_t, const std::string&, const ByteBuffer&,
+                           uint8_t)>
+      serverPush;
 
-  Responder(const std::function<void(const Response&)> respond,
-            const std::function<void(uint64_t)> close)
-      : respond(respond), close(close) {}
+  Responder(
+      const std::function<void(const Request&, const ByteBuffer&, uint8_t)>
+          respond,
+      const std::function<void(uint64_t)> close,
+      const std::function<void(uint64_t, const std::string&, const ByteBuffer&,
+                               uint8_t)>
+          serverPush)
+      : respond(respond), close(close), serverPush(serverPush) {}
 };
 
 class Server {
