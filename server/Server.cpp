@@ -80,9 +80,16 @@ void Server::route(std::function<bool(const Request&)> matcher,
 }
 
 void Server::sendResponse(const Response& resp) {
-  _commandQueue.push({.type = ServerCommand::Type::SEND,
-                      .connID = resp.connectionID(),
-                      .frame = resp.toFrame()});
+  auto it = _connections.find(resp.connectionID());
+  if (it == _connections.end()) {
+    return;
+  }
+
+  _commandQueue.push(
+      {.type = ServerCommand::Type::SEND,
+       .connID = resp.connectionID(),
+       .frame = it->second->makeRespFrame(resp.path(), resp.data(),
+                                          resp.status(), 0, resp.rid())});
 
   _wakeEpoll();
 }

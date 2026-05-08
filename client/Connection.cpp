@@ -9,9 +9,11 @@
 #include <unistd.h>
 
 #include <cstring>
+#include <iostream>
 
 #include "../core/enc/aes.hpp"
 #include "../core/enc/rsa.hpp"
+#include "../core/encoders.hpp"
 #include "../core/errors.hpp"
 
 namespace fmxp {
@@ -115,6 +117,7 @@ std::vector<Frame> Connection::_parseFrames() {
       if (_state == ConnectionState::HANDSHAKE) {
         if (frame.data.toString() == "Connection secured") {
           _state = ConnectionState::CONNECTED;
+          _ssid = frame.ssid;
           _frameBuffer = _frameBuffer.slice(bodyLen + __FMXP_HEADER_SIZE,
                                             _frameBuffer.size());
 
@@ -136,14 +139,29 @@ std::vector<Frame> Connection::_parseFrames() {
 
 void Connection::_doHandshake() {
   _aesKey = generateAESKey();
-  auto encedKey = rsaEncrypt(_aesKey, _pubKey);
-  _handleCommand({.type = ClientCommand::Type::SEND,
-                  .frame = Request("", encedKey).toFrame()});
+  auto encedKey = rsaEncrypt(_aesKey + u32ToStr(getTimestamp()), _pubKey);
+  ClientCommand c = {.type = ClientCommand::Type::SEND,
+                     .frame = _makeReqFrame("", encedKey, 0)};
+  _handleCommand(c);
+}
+
+Frame Connection::_makeReqFrame(const std::string& path, const ByteBuffer& data,
+                                uint8_t flags) {
+  return makeFrame(_fid, STATUS_REQ, flags, path, data, ++_rid, _ssid);
+}
+
+bool Connection::_validateFrame(const Frame& frame) {
+  if (frame.fid <= _lastSrvFid || frame.ssid != _ssid) {
+    close();
+    return false;
+  }
+  return true;
 }
 
 bool Connection::send(const Request& req) {
   if (!_running || _state == ConnectionState::CLOSED) return false;
-  _commandQueue.push({ClientCommand::Type::SEND, req.toFrame()});
+  _commandQueue.push(
+      {ClientCommand::Type::SEND, _makeReqFrame(req.path(), req.data(), 0)});
 
   uint64_t one = 1;
   write(_cmdEvFd, &one, sizeof(one));
@@ -175,20 +193,24 @@ void Connection::close() {
   _cmdEvFd = -1;
 }
 
-void Connection::_handleCommand(const ClientCommand& cmd) {
+void Connection::_handleCommand(ClientCommand& cmd) {
   if (cmd.type == ClientCommand::Type::SEND) {
     ByteBuffer toBeSent;
+    if (!cmd.frame.has_value())
+      throwErr(
+          ERR_CONNECTION,
+          "Connection::_handleCommand: send command does not have a frame");
     if (_state == ConnectionState::HANDSHAKE) {
       if (_handshakeSent) return;
-      _handshakeSent = true;
-
-      // the only frame we don't encrypt here
+      _handshakeSent = true;  // the only frame we don't encrypt here
       toBeSent = encodeFrame(cmd.frame.value(), false, ByteBuffer());
       ::send(_socket, toBeSent.cdata(), toBeSent.size(), 0);
       return;
     }
 
-    // normal sending logic
+    // now ID is assigned at the sending stage, ensuring no races happen
+    cmd.frame->fid = ++_fid;
+
     ByteBuffer encoded = encodeFrame(cmd.frame.value(), true, _aesKey);
     ::send(_socket, encoded.cdata(), encoded.size(), 0);
 
@@ -228,20 +250,32 @@ void Connection::_epollLoop() {
 
         // read
         if (events[i].events & EPOLLIN) {
-          char buffer[4096];
-          ssize_t len = recv(_socket, buffer, sizeof(buffer), 0);
+          char buf[8192];
 
-          if (len <= 0) {
-            _running = false;
-            // if (_onClose) _onClose();
-            _state = ConnectionState::CLOSED;
-            continue;
+          while (true) {
+            ssize_t bytes = recv(_socket, buf, sizeof(buf), 0);
+
+            // peer disconnected
+            if (bytes == 0) {
+              close();
+              break;
+            }
+
+            // socket error
+            if (bytes < 0) {
+              if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+              close();
+              break;
+            }
+
+            // append received chunk
+            _frameBuffer.append(reinterpret_cast<uint8_t*>(buf),
+                                static_cast<size_t>(bytes));
           }
-
-          // handle read
-          _frameBuffer.append(reinterpret_cast<uint8_t*>(buffer), len);
           auto frames = _parseFrames();
           for (auto& frame : frames) {
+            if (!_validateFrame(frame)) break;
+            _lastSrvFid = frame.fid;
             _onResponse(frame);
           }
         }

@@ -31,15 +31,14 @@ class Request {
   uint64_t _connID;
   std::string _path;
   ByteBuffer _data;
-  uint32_t _id;
+  uint32_t _rid;
 
  public:
   Request(const IOFrame& ioFrame);
   uint64_t connectionID() const;
   const std::string& path() const;
   const ByteBuffer& data() const;
-  uint32_t id() const;
-  Frame toFrame() const;
+  uint32_t rid() const;
 };
 
 class Response {
@@ -48,21 +47,20 @@ class Response {
   std::string _path;
   ByteBuffer _data;
   uint8_t _status;
-  uint32_t _id;  // 0 is a special id indicating that the response is not
-                 // tied to any request (server-side push)
+  uint32_t _rid;  // 0 is a special id indicating that the response is not
+                  // tied to any request (server-side push)
 
  public:
   Response(const Request& request, const ByteBuffer& data,
            uint8_t status = STATUS_OK);
   Response(uint64_t connectionID, const std::string& path,
-           const std::string& message, uint8_t status = STATUS_OK,
-           uint32_t id = 0);
+           const std::string& message, uint32_t rid,
+           uint8_t status = STATUS_OK);
   uint64_t connectionID() const;
   const std::string& path() const;
   const ByteBuffer& data() const;
   uint8_t status() const;
-  uint32_t id() const;
-  Frame toFrame() const;
+  uint32_t rid() const;
 };
 class ClientConnection {
  private:
@@ -72,6 +70,9 @@ class ClientConnection {
   uint32_t _maxFrameSize;
   ConnectionState _state = ConnectionState::HANDSHAKE;
   ByteBuffer _aesKey;
+  uint64_t _ssid = 0;
+  uint32_t _fid = 0;
+  uint32_t _lastCliFid = 0;
   ByteBuffer _inFrameBuffer;
   std::function<void(int, CloseReason)> _onClose;
   const std::string& _rsaPrivKey;
@@ -91,6 +92,9 @@ class ClientConnection {
   void setOnClose(std::function<void(int, CloseReason)> onClose);
   void sendFrame(const Frame& frame);
   bool readFd();
+
+  Frame makeRespFrame(const std::string& path, const ByteBuffer& data,
+                      uint8_t status, uint8_t flags, uint32_t rid);
 
   ClientConnection(const ClientConnection&) = delete;
   ClientConnection& operator=(const ClientConnection&) = delete;
